@@ -715,7 +715,7 @@ await test('contains - substring found returns true', async () => {
   const facts = createScanFacts(data);
   
   const evaluator = new ConditionEvaluator(facts);
-  const result = evaluator.stringContains(
+  const result = await evaluator.stringContains(
     { type: 'string', value: 'hello world' },
     { type: 'string', value: 'world' },
     false
@@ -728,7 +728,7 @@ await test('icontains - case-insensitive contains', async () => {
   const facts = createScanFacts(data);
   
   const evaluator = new ConditionEvaluator(facts);
-  const result = evaluator.stringContains(
+  const result = await evaluator.stringContains(
     { type: 'string', value: 'Hello World' },
     { type: 'string', value: 'world' },
     true
@@ -741,7 +741,7 @@ await test('startswith - string starts with prefix', async () => {
   const facts = createScanFacts(data);
   
   const evaluator = new ConditionEvaluator(facts);
-  const result = evaluator.stringStartsWith(
+  const result = await evaluator.stringStartsWith(
     { type: 'string', value: 'hello world' },
     { type: 'string', value: 'hello' },
     false
@@ -754,7 +754,7 @@ await test('endswith - string ends with suffix', async () => {
   const facts = createScanFacts(data);
   
   const evaluator = new ConditionEvaluator(facts);
-  const result = evaluator.stringEndsWith(
+  const result = await evaluator.stringEndsWith(
     { type: 'string', value: 'hello world' },
     { type: 'string', value: 'world' },
     false
