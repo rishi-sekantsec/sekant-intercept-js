@@ -1,0 +1,116 @@
+COMPREHENSIVE BASE64 TEST FILE FOR YARA COMPARISON
+===================================================
+
+This file contains 10 base64 test cases to compare Node.js and Python YARA
+implementations. Each test includes the original string, its base64 encoding,
+and various contexts to test matching behavior.
+
+---[ Test 1: $b1 = "hello world" base64 ]---
+
+Original (should NOT match): hello world
+Base64 encoded: aGVsbG8gd29ybGQ=
+In context: The encoded value is aGVsbG8gd29ybGQ= here.
+Multiple: aGVsbG8gd29ybGQ= and aGVsbG8gd29ybGQ= again.
+
+---[ Test 2: $b2 = "test@123!" base64 ]---
+
+Original (should NOT match): test@123!
+Base64 encoded: dGVzdEAxMjMh
+Embedded: Start dGVzdEAxMjMh end.
+URL format: ?token=dGVzdEAxMjMh&next=home
+
+---[ Test 3: $b3 = "ABC" base64 ]---
+
+Original (should NOT match): ABC
+Base64 encoded: QUJD
+Short test: QUJD
+In sentence: The value QUJD is encoded.
+Multiple instances: QUJD QUJD QUJD
+
+---[ Test 4: $b4 = "The quick brown fox jumps over the lazy dog" base64 ]---
+
+Original (should NOT match): The quick brown fox jumps over the lazy dog
+Base64 encoded: VGhlIHF1aWNrIGJyb3duIGZveCBqdW1wcyBvdmVyIHRoZSBsYXp5IGRvZw==
+Wrapped in JSON: {"data": "VGhlIHF1aWNrIGJyb3duIGZveCBqdW1wcyBvdmVyIHRoZSBsYXp5IGRvZw=="}
+
+---[ Test 5: $b5 = "CaseSensitive" base64 nocase ]---
+
+Original (should NOT match): CaseSensitive
+Base64 encoded: Q2FzZVNlbnNpdGl2ZQ==
+Lowercase variant: q2FzZVNlbnNpdGl2ZQ== (should match with nocase)
+UPPERCASE variant: Q2FTZVNLBNNPDGL2ZQ== (different encoding, won't match)
+Mixed: Q2FzZVNlbnNpdGl2ZQ== is here.
+
+---[ Test 6: $b6 = "wide test" base64wide ]---
+
+Original (should NOT match): wide test
+Base64wide encoded: dwBpAGQAZQAgAHQAZQBzAHQA
+In context: The wide encoding is dwBpAGQAZQAgAHQAZQBzAHQA
+Multiple: dwBpAGQAZQAgAHQAZQBzAHQA dwBpAGQAZQAgAHQAZQBzAHQA
+
+---[ Test 7: $b7 = "12345!@#$%" base64 ]---
+
+Original (should NOT match): 12345!@#$%
+Base64 encoded: MTIzNDUhQCMkJQ==
+As data: data:text/plain;base64,MTIzNDUhQCMkJQ==
+Embedded: Begin MTIzNDUhQCMkJQ== End
+
+---[ Test 8: $b8 = "X" base64 ]---
+
+Original (should NOT match): X
+Base64 encoded: WA==
+Simple: WA==
+In array: ["WA==", "other", "values"]
+Repeated: WA== WA== WA==
+
+---[ Test 9: $b9 = "https://example.com/path" base64 ]---
+
+Original (should NOT match): https://example.com/path
+Base64 encoded: aHR0cHM6Ly9leGFtcGxlLmNvbS9wYXRo
+As config: url=aHR0cHM6Ly9leGFtcGxlLmNvbS9wYXRo
+In XML: <encoded>aHR0cHM6Ly9leGFtcGxlLmNvbS9wYXRo</encoded>
+
+---[ Test 10: $b10 = "MiXeD CaSe" base64 ]---
+
+Original (should NOT match): MiXeD CaSe
+Base64 encoded: TWlYZUQgQ2FTZQ==
+Standard: TWlYZUQgQ2FTZQ==
+In header: Authorization: Basic TWlYZUQgQ2FTZQ==
+Multiple contexts: TWlYZUQgQ2FTZQ== appears TWlYZUQgQ2FTZQ== twice.
+
+---[ Additional Noise Data ]---
+
+Random base64-looking strings (should NOT match):
+- YWJjZGVmZ2hpamtsbW5vcA==
+- VGVzdGluZzEyMzQ1Njc4OQ==
+- SGVsbG9Xb3JsZFRlc3Q=
+
+Real base64 data (from our tests above):
+aGVsbG8gd29ybGQ=
+dGVzdEAxMjMh
+QUJD
+VGhlIHF1aWNrIGJyb3duIGZveCBqdW1wcyBvdmVyIHRoZSBsYXp5IGRvZw==
+Q2FzZVNlbnNpdGl2ZQ==
+dwBpAGQAZQAgAHQAZQBzAHQA
+MTIzNDUhQCMkJQ==
+WA==
+aHR0cHM6Ly9leGFtcGxlLmNvbS9wYXRo
+TWlYZUQgQ2FTZQ==
+
+---[ END OF TEST FILE ]---
+
+Expected Matches:
+- $b1: 4 matches (aGVsbG8gd29ybGQ=)
+- $b2: 3 matches (dGVzdEAxMjMh)
+- $b3: 5 matches (QUJD)
+- $b4: 3 matches (VGhlIHF1aWNrIGJyb3duIGZveCBqdW1wcyBvdmVyIHRoZSBsYXp5IGRvZw==)
+- $b5: 3-4 matches depending on nocase implementation (Q2FzZVNlbnNpdGl2ZQ==)
+- $b6: 3 matches (dwBpAGQAZQAgAHQAZQBzAHQA)
+- $b7: 3 matches (MTIzNDUhQCMkJQ==)
+- $b8: 4 matches (WA==)
+- $b9: 3 matches (aHR0cHM6Ly9leGFtcGxlLmNvbS9wYXRo)
+- $b10: 4 matches (TWlYZUQgQ2FTZQ==)
+
+Note: The base64 modifier in YARA searches for base64-encoded versions of the 
+original string. The implementation may include padding variations and alphabet 
+permutations to catch different base64 encoding schemes.

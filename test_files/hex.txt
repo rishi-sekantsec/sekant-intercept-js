@@ -1,0 +1,169 @@
+Hello World! This file contains TEST data.
+DeadBeef is a common hex pattern.
+
+Wildcards: A9C matches A_C pattern
+P@@T matches P__T with two wildcards
+#B# matches _B_ with wildcards on both sides
+
+Jump patterns: A#C has 1 byte between
+A###E has 3 bytes between for A[2-4]E
+AB is adjacent for A[0-2]B
+X#####Z has 5 bytes for X[1-]Z unbounded jump
+
+Alternation tests:
+Single chars: A B C should match alternation
+Words: PAT PET PIT should all match
+Combos: He! and By! should both match
+
+Case: abc in lowercase
+
+Complex: MZ with 0x90 byte after = MZ header
+Pattern: P#T##! matches wildcard + jump combo
+Another: A##E matches alternation + jump
+
+Negation: A#C where middle is not 0x42
+
+Wildcards with text: ##BEGIN starts with two wildcards
+END## has wildcards at the end
+A#B#C has jumps between letters
+
+Long pattern: This is a long pattern matches fully
+
+Single: X matches single byte
+AAA is three repeated A's
+Four nulls: \x00\x00\x00\x00
+
+MZ\x90\x00 is a common executable header (tests h28/h29)
+
+Sequential bytes: \x00\x01\x02\x03\x04\x05
+High bytes: \xFF\xFE\xFD\xFC
+Special: \x0A\x0D\x00 (LF CR NULL)
+
+Zero jump: AB is A[0]B
+Range jump: A#######B is A[5-10]B with 7 bytes
+Long jump: A with 15 bytes then B for A[10-]B
+
+Alternation sets:
+AB CD EF are all alternatives
+PAT PBT PCT PDT PET cycle through P[A-E]T
+
+Nested: ABE matches A(B)E
+Also: ACDE matches A(CD)E
+Pattern: A#C matches (A|B)_(C|D)
+
+Edge: AB is A[0-0]B exact
+Single: A in parens
+
+File signatures:
+%PDF starts PDF files
+ZIP header: PK\x03\x04
+PNG signature: \x89PNG\x0D\x0A\x1A\x0A
+JPEG: \xFF\xD8\xFF
+
+Shellcode patterns:
+x86 prologue: \x55\x89\xE5
+NOP sled: \x90\x90\x90
+Epilogue: \x5F\x5E\x5D\xC3
+
+Strings: /bin/sh\x00 is a shell path
+ROOT is a common admin name
+
+Additional test data for better coverage:
+
+Multiple Hellos: Hello Hello Hello
+TEST appears: TEST and TEST again
+More deadbeef: DEADBEEF in caps
+
+Wildcard variations:
+AXC AYC AZC for A?C pattern
+PABT PCDT PEFT for P??T pattern
+
+Jump variations:
+A1C A12C A123C for different jump sizes
+X12345Z X123456789Z for unbounded jumps
+
+PAT PAT PAT repeated pattern
+PET PET alternate
+PIT appears once
+
+More MZ patterns: MZ MZ\x90 MZ\x00
+
+BEGIN BEGIN at start
+END END at end
+
+This is a long pattern appears twice for testing: This is a long pattern
+
+XXX for single byte matches
+More AAA patterns: AAA AAA
+
+File headers repeated:
+%PDF-1.4 version
+ZIP content with PK
+PNG and JPEG embedded
+
+Shellcode: \x90\x90\x90\x90\x90 extended NOP
+/bin/bash\x00 another shell
+ROOT ROOT ROOT
+
+Edge cases with nulls: \x00\x00\x00\x00\x00\x00\x00\x00
+High bytes: \xFF\xFF\xFF\xFF\xFF
+Mixed: \x00\xFF\x00\xFF\x00\xFF
+
+AB AB AB for zero-jump testing
+CD CD matches alternation
+EF standalone
+
+Sequential: \x00\x01\x02\x03\x04\x05\x06\x07\x08\x09
+
+The end.
+
+=== NEGATION TESTS ===
+
+Negation pattern h18: F4 23 ~00 62 B4
+Test data with 0xFF (should match): \xF4\x23\xFF\x62\xB4
+Test data with 0x00 (should NOT match): \xF4\x23\x00\x62\xB4
+Test data with 0x99 (should match): \xF4\x23\x99\x62\xB4
+
+Negation pattern h19: F4 23 ~?0 62 B4 (low nibble NOT 0)
+Test with 0xA1 low=1 (should match): \xF4\x23\xA1\x62\xB4
+Test with 0xB0 low=0 (should NOT match): \xF4\x23\xB0\x62\xB4
+Test with 0x5F low=F (should match): \xF4\x23\x5F\x62\xB4
+
+Negation pattern h20_neg: 41 ~42 43 (A NOT-B C)
+Test A\x99C (should match)
+Test ABC (should NOT match because middle byte is B/0x42)
+Test A\x00C (should match)
+
+Negation pattern h21_neg: He(NOT l)lo
+Hemlo should match (m instead of l)
+Hello should NOT match (has l/0x6C)
+
+Negation pattern h22_neg: Three non-null bytes
+ABC should match
+\x00AB should NOT match (starts with null)
+\xFF\xFE\xFD should match
+
+Negation pattern h23_neg: P (NOT any byte) T
+This is impossible - should never match
+
+Negation pattern h24_neg: (NOT 0xFF) AB
+\x00AB should match
+\xFFAB should NOT match
+PAB (0x50 AB) should match
+
+Negation pattern h25_neg: A (NOT B or C) D
+A\x99D should match
+ABD should NOT match (has B)
+ACD should NOT match (has C)
+A\x00D should match
+
+More test variations:
+ABC ABC ABC
+Hemlo Hemlo
+PAB PAB
+
+\xF4\x23\xFF\x62\xB4 pattern repeated
+\xF4\x23\xA1\x62\xB4 pattern repeated
+
+A\x99C A\x00C patterns
+A\x99D A\x00D patterns

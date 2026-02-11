@@ -1,0 +1,77 @@
+This is a test file for YARA rule modifiers, tags, and metadata.
+
+=== Basic Tests ===
+basic - should match BasicRule
+private - should match PrivateRule (but not reported due to private modifier)
+global - should match GlobalRule (global rules always evaluated)
+privateglobal - should match PrivateGlobalRule (private global - not reported)
+
+=== Tag Tests ===
+singletag - should match SingleTagRule with tag1
+multipletags - should match MultipleTagsRule with tags: tag1, tag2, tag3
+manytags - should match ManyTagsRule with 10 tags
+
+=== Metadata Tests ===
+metadata - should match MetadataRule with author, description, version
+metadatatags - should match MetadataTagsRule with metadata AND tags (malware, trojan)
+variousmeta - should match VariousMetadataTypesRule with different metadata types
+numericmeta - should match NumericMetadataRule with numeric metadata values
+specialmeta - should match SpecialCharsMetaRule with special characters in metadata
+urlmeta - should match URLMetadataRule with URL references
+
+=== Combined Tests ===
+privatemetatags - should match PrivateMetadataTagsRule (but not reported - private)
+allfeatures complete - should match AllFeaturesRule with all features
+
+=== Dependency Tests ===
+dependent - should match DependentRule (depends on BasicRule which also matches)
+usesprivate - should match UsesPrivateRule (uses PrivateRule in condition)
+
+=== Global Tests ===
+globaltagsmeta - should match GlobalTagsMetaRule (global with tags and metadata)
+hiddenglobal - should match HiddenGlobalRule (private global with everything)
+
+=== Edge Cases ===
+This file always matches EmptyStringsRule (condition: true)
+This file always matches NoStringsRule (condition: true, no strings defined)
+
+=== Multiple Occurrences ===
+basic basic basic
+singletag singletag
+metadata metadata metadata
+
+=== Testing Non-Matches ===
+This text should not match any specific patterns except the always-true rules.
+Some random content: Lorem ipsum dolor sit amet.
+Numbers: 1234567890
+Special chars: !@#$%^&*()_+-=[]{}|;:',.<>?/
+
+=== Testing Private Rule Usage ===
+When PrivateRule matches "private", it enables UsesPrivateRule.
+The word "usesprivate" appears here with "private" to test this.
+
+=== Testing Case Sensitivity ===
+BASIC should not match (case sensitive)
+PRIVATE should not match (case sensitive)
+METADATA should not match (case sensitive)
+
+=== Comprehensive Test Section ===
+Let's include all matching terms in one section:
+basic private global singletag multipletags metadata metadatatags
+variousmeta numericmeta specialmeta urlmeta allfeatures complete
+dependent usesprivate globaltagsmeta manytags privateglobal privatemetatags
+
+=== Final Validation ===
+This test file validates:
+1. Private rules are not reported in results
+2. Global rules are always evaluated
+3. Tags are properly attached to rules
+4. Metadata is correctly parsed and included
+5. Multiple tags work correctly
+6. Various metadata types (string, int, bool) work
+7. Special characters in metadata are handled
+8. Rule dependencies work correctly
+9. Private rules can still be referenced in conditions
+10. Combinations of modifiers, tags, and metadata work together
+
+End of test file.

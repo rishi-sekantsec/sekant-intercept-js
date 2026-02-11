@@ -1,0 +1,63 @@
+Test file for basic.yar string pattern matching
+================================================
+
+Expected matches:
+- $literal: Should match "MALWARE" (case-insensitive, ascii/wide)
+  * Line 10: ASCII version "malware"
+  * Line 15: Uppercase "MALWARE"
+  * Line 20: Mixed case "MaLwArE"
+  * Line 25: Wide-char version (UTF-16LE)
+
+- $regex: Should match pattern /[A-Z]{3}-\d{4}-[A-Z]{2}/
+  * Line 30: "ABC-1234-XY"
+  * Line 35: "ZZZ-9999-AA"
+  * Line 40: "DEF-5678-BC"
+
+- $hex: Should match { 4D 5A 90 00 ?? ?? ?? ?? [4-6] E8 }
+  * Offset ~500: PE header start with wildcard bytes
+  * Offset ~600: Another PE-like pattern with 5 variable bytes
+
+================================================
+
+This is a test file with malware in it (first ASCII match).
+Some benign content here to create spacing.
+More text to push content to different offsets.
+Lorem ipsum dolor sit amet, consectetur adipiscing elit.
+
+Now we have MALWARE in uppercase (second ASCII match).
+Additional padding text goes here.
+The quick brown fox jumps over the lazy dog.
+Pack my box with five dozen liquor jugs.
+
+Here's a mixed case version: MaLwArE (third ASCII match).
+More filler content to separate matches.
+Sed do eiusmod tempor incididunt ut labore.
+Et dolore magna aliqua.
+
+Wide character version: M\x00a\x00l\x00w\x00a\x00r\x00e\x00 (fourth match in UTF-16LE).
+This simulates wide string encoding.
+
+Now for regex pattern matches:
+The first code is ABC-1234-XY which should match.
+Some spacing text between matches.
+Ut enim ad minim veniam, quis nostrud exercitation.
+
+Here's another valid code: ZZZ-9999-AA (second regex match).
+More buffer content here.
+Ullamco laboris nisi ut aliquip ex ea commodo.
+
+And a third code: DEF-5678-BC (third regex match).
+Final padding before hex patterns.
+Duis aute irure dolor in reprehenderit.
+
+Hex pattern section (simulating PE headers):
+MZ\x90\x00\x00\x00\x00\x00\x12\x34\x56\x78\x90\xe8 (first hex match with 5 variable bytes)
+More binary-like content follows.
+\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00
+
+Another PE-like pattern here:
+MZ\x90\x00\xff\xff\x00\x00\xaa\xbb\xcc\xdd\xe8 (second hex match with 4 variable bytes)
+End of hex patterns.
+
+Final padding content to ensure all matches are captured.
+The end of the test file.

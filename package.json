@@ -1,0 +1,43 @@
+{
+  "name": "sekant-intercept-js",
+  "version": "1.0.0",
+  "description": "An Embeddable YARA-Compatible Content Inspection Engine for Edge Deployments",
+  "main": "src/index.js",
+  "type": "module",
+  "directories": {
+    "doc": "docs",
+    "example": "examples",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "node tests/runAllIntegrationTests.mjs",
+    "example:scanner": "node examples/exampleYaraScanner.mjs",
+    "example:modules": "node examples/exampleMathModule.mjs && node examples/exampleHashModule.mjs && node examples/examplePEScanner.mjs && node examples/exampleELFScanner.mjs",
+    "example:advanced": "node examples/exampleBooleanLiterals.mjs && node examples/exampleConditionsMatch.mjs && node examples/exampleDependentRules.mjs && node examples/exampleCompleteIntegration.mjs && node examples/exampleFilesizeOperator.mjs",
+    "build": "esbuild src/index.js --bundle --platform=node --format=esm --outfile=dist/sekant-intercept.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rishi-sekantsec/sekant-intercept-js.git"
+  },
+  "keywords": [
+    "javascript",
+    "library",
+    "yara",
+    "embeddable",
+    "content-inspection"
+  ],
+  "author": "Rishi Kant",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/rishi-sekantsec/sekant-intercept-js/issues"
+  },
+  "homepage": "https://github.com/rishi-sekantsec/sekant-intercept-js#readme",
+  "dependencies": {
+    "pe-library": "^2.0.1",
+    "spark-md5": "^3.0.2"
+  },
+  "devDependencies": {
+    "esbuild": "^0.27.3"
+  }
+}

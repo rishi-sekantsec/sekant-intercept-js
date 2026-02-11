@@ -1,0 +1,258 @@
+TEST FILE FOR LITERAL STRING VARIATIONS IN YARA
+================================================
+
+This file contains test data for every string pattern defined in literals.yar.
+Each section corresponds to a specific string pattern with variations.
+
+---[ $a1: "basic string" (exact match, case sensitive) ]---
+
+basic string
+This is a basic string in a sentence.
+Another basic string here.
+
+---[ $a2: "case insensitive" nocase (all case variations) ]---
+
+case insensitive
+CASE INSENSITIVE
+Case Insensitive
+CaSe InSeNsItIvE
+case INSENSITIVE
+CASE insensitive
+case Insensitive Test
+
+---[ $a3: "wide string" wide (UTF-16 LE encoding) ]---
+
+ASCII version (should NOT match): wide string
+Wide version in hex follows this marker: [WIDE_A3]
+w i d e   s t r i n g 
+
+---[ $a4: "wide nocase" wide nocase (UTF-16 LE with case variations) ]---
+
+ASCII version (should NOT match): wide nocase
+Wide version in hex follows this marker: [WIDE_A4]
+w i d e   n o c a s e 
+W I D E   N O C A S E 
+Wide Nocase
+
+---[ $a5: "ascii string" ascii (explicit ASCII, same as default) ]---
+
+ascii string
+This is an ascii string in text.
+Multiple ascii string occurrences.
+
+---[ $a6: "ascii nocase" ascii nocase (ASCII with case variations) ]---
+
+ascii nocase
+ASCII NOCASE
+Ascii Nocase
+aScIi NoCaSe
+ASCII nocase test
+
+---[ $a7: "ascii and wide" ascii wide (both ASCII and UTF-16) ]---
+
+ASCII version: ascii and wide
+Wide version follows: [WIDE_A7]
+a s c i i   a n d   w i d e 
+
+---[ $a8: "all modifiers" ascii wide nocase (both encodings, all cases) ]---
+
+ASCII versions:
+all modifiers
+ALL MODIFIERS
+All Modifiers
+aLl MoDiFiErS
+
+Wide version follows: [WIDE_A8]
+a l l   m o d i f i e r s 
+A L L   M O D I F I E R S 
+
+---[ $a9: "xor string" xor (XOR encoded with any byte) ]---
+
+Plain text (should NOT match): xor string
+XOR with key 0x01: yns!rushof
+XOR with key 0x42: :-0b160+,%
+XOR with key 0xAA: ÒÅØÙÞØÃÄÍ
+
+---[ $a10: "xor range" xor(1-255) (XOR with specific range) ]---
+
+Plain text (should NOT match): xor range
+XOR with key 0x01: yns!s`ofd
+XOR with key 0x42: :-0b0#,%'
+XOR with key 0xAA: ÒÅØØËÄÍÏ
+
+---[ $a11: "xor nocase" xor nocase (XOR + case insensitive) ]---
+
+Plain text (should NOT match): xor nocase
+XOR with key 0x01: yns!onb`rd
+XOR with key 0x42: :-0b,-!#1'
+Case variation XOR 0x01: YNS!ONB@RD
+
+---[ $a12: "xor wide" xor wide (XOR on UTF-16 encoding) ]---
+
+Plain text (should NOT match): xor wide
+ASCII (should NOT match): xor wide
+Wide plain (should NOT match in wide form)
+XOR'd wide version follows: [XOR_WIDE_A12]
+
+---[ $a13: "base64 string" base64 (Base64 encoded) ]---
+
+Plain text (should NOT match): base64 string
+Base64 encoded: YmFzZTY0IHN0cmluZw==
+Embedded: The YmFzZTY0IHN0cmluZw== is here.
+Another encoding: YmFzZTY0IHN0cmluZw
+
+---[ $a14: "base64 wide" base64wide (Base64 of UTF-16) ]---
+
+Plain text (should NOT match): base64 wide
+Base64wide encoded: YgBhAHMAZQA2ADQAIAB3AGkAZABlAA==
+Embedded: YgBhAHMAZQA2ADQAIAB3AGkAZABlAA== test
+
+---[ $a15: "custom base64" base64("!@#$...") (custom alphabet) ]---
+
+Plain text (should NOT match): custom base64
+With standard base64: Y3VzdG9tIGJhc2U2NA==
+With custom alphabet (using provided charset): needs calculation
+
+---[ $a16: "fullword" fullword (word boundary required) ]---
+
+fullword
+This is a fullword in sentence.
+notfullwordhere (should NOT match)
+fullwordbutnotalone (should NOT match)
+another fullword here
+fullword.
+(fullword)
+-fullword-
+
+---[ $a17: "fullword nocase" fullword nocase (word boundary + case insensitive) ]---
+
+fullword nocase
+FULLWORD NOCASE
+Fullword Nocase
+This is a FULLWORD NOCASE test.
+notfullwordnocase (should NOT match)
+fullwordnocasebutjammed (should NOT match)
+another Fullword Nocase here.
+
+---[ $a18: "private string" private (should match but not count in condition) ]---
+
+private string
+This is a private string test.
+Multiple private string occurrences.
+PRIVATE STRING
+
+---[ ESCAPED CHARACTERS TESTS ]---
+
+---[ $e1: "text with \"quotes\" inside" (double quote escape) ]---
+
+text with "quotes" inside
+This is text with "quotes" inside a sentence.
+Multiple: text with "quotes" inside
+
+---[ $e2: "path\\to\\file" (backslash escape) ]---
+
+path\to\file
+Windows path: C:\path\to\file
+Another path\to\file here.
+
+---[ $e3: "line1\rline2" (carriage return) ]---
+
+line1
+line2
+Text with line1
+line2 embedded.
+CR test: line1
+line2
+
+---[ $e4: "col1\tcol2\tcol3" (horizontal tab) ]---
+
+col1	col2	col3
+Data:	col1	col2	col3
+Another	col1	col2	col3	test
+
+---[ $e5: "first line\nsecond line" (newline) ]---
+
+first line
+second line
+Text containing first line
+second line here.
+Multiple first line
+second line instances.
+
+---[ $e6: "start\x41\x42\x43end" = "startABCend" (hex notation) ]---
+
+startABCend
+This is startABCend test.
+Multiple startABCend occurrences.
+
+---[ $e7: "complex\t\"test\"\nwith\\escapes" (multiple escapes) ]---
+
+complex	"test"
+with\escapes
+Text: complex	"test"
+with\escapes
+Another complex	"test"
+with\escapes
+
+---[ $e8: "data\tseparated" nocase (tab with nocase) ]---
+
+data	separated
+DATA	SEPARATED
+Data	Separated
+DaTa	SePaRaTeD
+
+---[ $e9: "boundary" fullword (word boundary test) ]---
+
+boundary
+This is a boundary test.
+notboundaryhere (should NOT match)
+Another boundary.
+boundary!
+(boundary)
+
+---[ $e10: "\x48\x65\x6c\x6c\x6f" = "Hello" (hex bytes) ]---
+
+Hello
+This is a Hello test.
+Multiple Hello instances.
+HELLO should not match (case sensitive).
+
+---[ END OF TEST FILE ]---
+
+Total literal patterns: 28 (18 original + 10 escaped character tests)
+
+Expected behavior:
+- ASCII patterns: match when bytes are exactly as specified (with nocase variations)
+- Wide patterns: match when text is encoded as UTF-16 LE (with null bytes between chars)
+- XOR patterns: match when XORed with specified key range
+- Base64 patterns: match when base64 encoded
+- Fullword patterns: only match when surrounded by non-alphanumeric characters
+- Private patterns: match found but not included in condition evaluation
+- Escaped characters: 
+  * \" matches literal double quote character
+  * \\ matches literal backslash character
+  * \r matches carriage return (0x0D)
+  * \t matches horizontal tab (0x09)
+  * \n matches newline/line feed (0x0A)
+  * \xdd matches byte with hex value dd (e.g., \x41 = 'A')
+
+Note: Wide string patterns with actual UTF-16 encoding are indicated by [WIDE_*] markers
+followed by spaced characters. In a real binary file, these would be actual null-byte
+separated characters (e.g., "wide" = 0x77 0x00 0x69 0x00 0x64 0x00 0x65 0x00).
+
+For testing purposes, you may need to create a binary file with proper UTF-16 LE encoding
+for wide string tests to work correctly. The spaced characters above are visual representations
+only and won't match wide patterns in this ASCII text file.
+
+---[ ESCAPED CHARACTERS WITH ACTUAL BYTES ]---
+
+$e2 test: path\to\file
+
+$e3 test: line1line2
+
+$e9 test: word
+next
+
+$e7 test: complex	"test"
+with\escapes
+

@@ -1,0 +1,15 @@
+Sekant Intercept.js
+Copyright 2026 Rishi Kant (Sekant Security Inc.)
+
+This product includes software developed by Rishi Kant and Sekant Security Inc.
+(https://github.com/rishi-sekantsec/sekant-intercept-js).
+
+This product includes the following third-party software:
+
+* pe-library
+  Copyright (c) 2018-2025 jet (ジェット)
+  Licensed under the MIT License.
+
+* spark-md5
+  Copyright (c) 2015 André Cruz <amdfcruz@gmail.com>
+  Licensed under the MIT License.

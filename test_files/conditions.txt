@@ -1,0 +1,80 @@
+This is a comprehensive test file for YARA condition grammar matching.
+
+===== Section 1: Basic String Identifiers =====
+apple banana cherry dog cat elephant
+Test data: apple, banana, cherry, dog, cat, elephant (no mouse)
+
+===== Section 2: Quantifiers - "of them" =====
+one two three
+alpha beta gamma
+red green blue yellow (but not absent1, absent2, absent3)
+first second third fourth
+
+===== Section 3: Quantifiers - "of" with sets =====
+lion tiger bear wolf
+sun moon star
+mercury venus earth mars
+
+===== Section 4: Match Count (#a) =====
+repeat repeat
+many many many many many
+few few few
+count count count
+
+===== Section 5: Match Offset (@a) =====
+headeroffset middle range indexed indexed indexed
+
+===== Section 6: Match Length (!a) =====
+length longerword
+
+===== Section 7: Logical Operators =====
+both present
+either or
+yes (but not no)
+complex logic (but not test)
+
+===== Section 8: Comparison Operators =====
+equal notequal greater less gte lte
+
+===== Section 9: Arithmetic Operators =====
+add subtract multiply divide modulo
+
+===== Section 10: Bitwise Operators =====
+(tested via uint8 data access in binary file)
+
+===== Section 11: Boolean Literals =====
+bool
+
+===== Section 12: Filesize =====
+size
+
+===== Section 13: Entrypoint =====
+entry
+
+===== Section 14: Data Access =====
+(tested via uint8/uint16/uint32 in binary file)
+
+===== Section 15: String Operations =====
+container prefix suffix pattern123
+
+===== Section 16: For Loops =====
+for1 for2 for3
+any1 any2 any3
+
+===== Section 17: Parentheses and Precedence =====
+prec1 prec2 prec3
+paren1 paren2
+nest1 nest3
+
+===== Section 18: Defined Operator =====
+(tested via data access)
+
+===== Section 19: Dependent Rules =====
+dependency dependent
+
+===== Section 20: Complex Combined Conditions =====
+complex1 complex2
+offsets ranges
+everything together
+
+End of test file.

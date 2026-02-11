@@ -1,0 +1,284 @@
+COMPREHENSIVE REGEX TEST FILE FOR YARA
+=======================================
+
+This file contains test data for all 50 regex patterns in regex.yar.
+Each section includes positive matches and edge cases.
+
+---[ CHARACTER CLASSES: $r1-$r5 ]---
+
+$r1: /[0-9]+/ (one or more digits)
+Test: 123 and 456789 and 0
+Numbers: 42 is the answer. 999999.
+Edge: a1b2c3 has digits 1 2 3 embedded.
+
+$r2: /[a-z]+/ (lowercase letters)
+Test: hello world lowercase
+More: abcdefghijklmnopqrstuvwxyz
+Mixed: Hello123World (has hello in it)
+
+$r3: /[A-Z]+/ (uppercase letters)
+Test: HELLO WORLD UPPERCASE
+More: ABCDEFGHIJKLMNOPQRSTUVWXYZ
+Mixed: Hello123WORLD (has HELLO in it)
+
+$r4: /[a-zA-Z]+/ (any letters)
+Test: MixedCase letters ABC abc
+Combined: AaBbCcDdEeFf
+
+$r5: /[a-zA-Z0-9]+/ (alphanumeric)
+Test: Mix3d123 alphanumeric ABC123xyz
+Hex: DEADBEEF and cafebabe
+
+---[ QUANTIFIERS: $r6-$r11 ]---
+
+$r6: /test?/ (zero or one 't')
+Matches: tes or test (both valid)
+Multiple: test test tes
+
+$r7: /test*/ (zero or more 't')
+Matches: tes or test or testt or testtt
+Test: tes test testt testtt testttttt
+
+$r8: /test+/ (one or more 't')
+Matches: test testt testtt (not tes)
+Test: test testt testtt testttttt
+
+$r9: /test{3}/ (exactly 3 't's)
+Matches: testtt (exactly 3)
+Test: testt testtt testttt
+
+$r10: /test{2,4}/ (between 2-4 't's)
+Matches: testt testtt testttt
+Test: test testt testtt testttt testttttt
+
+$r11: /test{2,}/ (at least 2 't's)
+Matches: testt testtt testttt...
+Test: test testt testtt testttttttttt
+
+---[ ANCHORS: $r12-$r14 ]---
+
+$r12: /^start/ (start of buffer)
+start of line test
+Another start in middle
+startagain
+
+$r13: /end$/ (end of buffer)
+Should match at end
+Line with end
+Last line should end
+
+$r14: /\bword\b/ (word boundaries)
+Test: word in sentence.
+More: sword password (should NOT match)
+Good: a word here.
+
+---[ SPECIAL CHARACTERS: $r15-$r20 ]---
+
+$r15: /\d+/ (digits)
+Numbers: 123 456 789
+Mixed: abc123def456
+
+$r16: /\w+/ (word characters)
+Words: hello_world test123
+More: variable_name_123
+
+$r17: /\s+/ (whitespace)
+Spaces between words here.
+	Tabs	and		spaces.
+
+$r18: /\D+/ (non-digits)
+Text without numbers: hello world!
+Symbols: @#$%^&*()
+
+$r19: /\W+/ (non-word characters)
+Symbols: !@#$ %^&* ()[]{}
+Punctuation: ... --- !!!
+
+$r20: /\S+/ (non-whitespace)
+Continuous_text and more_text
+No-spaces-here
+
+---[ ALTERNATION: $r21-$r23 ]---
+
+$r21: /(cat|dog|bird)/ (alternation)
+Animals: cat dog bird
+More: The cat and dog are friends. A bird flew by.
+
+$r22: /(red|blue) car/ (grouped)
+Cars: red car and blue car
+Test: I saw a red car. She drives a blue car.
+
+$r23: /gr(a|e)y/ (gray or grey)
+Colors: gray and grey
+Both: The gray cat and the grey dog.
+
+---[ DOT METACHARACTER: $r24-$r26 ]---
+
+$r24: /a.b/ (any char between a and b)
+Test: aab abb acb adb axb a b a9b
+Edge: ab (no char between)
+
+$r25: /a.*b/ (any chars greedy)
+Test: a...b and a_long_string_here_b
+Edge: ab (zero chars) axyzb
+
+$r26: /a.+b/ (one or more chars)
+Test: a_b and a___b and a12345b
+Not: ab (needs at least one char)
+
+---[ ESCAPED CHARACTERS: $r27-$r35 ]---
+
+$r27: /\./ (literal dot)
+Test: domain.com and file.txt
+Dots: . ... ..... end.
+
+$r28: /\*/ (literal asterisk)
+Test: * asterisk * star *
+Math: 2 * 3 = 6
+
+$r29: /\+/ (literal plus)
+Test: + plus + add +
+Math: 2 + 3 = 5
+
+$r30: /\?/ (literal question mark)
+Test: ? question ? maybe ?
+Questions: What? Why? How?
+
+$r31: /\[/ (literal left bracket)
+Test: [ bracket [ array [
+Code: array[0] list[1]
+
+$r32: /\]/ (literal right bracket)
+Test: ] bracket ] end ]
+Code: array[0] list[1]
+
+$r33: /\(/ (literal left paren)
+Test: ( paren ( start (
+Code: function(arg)
+
+$r34: /\)/ (literal right paren)
+Test: ) paren ) end )
+Code: function(arg)
+
+$r35: /\\/ (literal backslash)
+Test: \ backslash \ path \
+Paths: C:\Windows\System32
+
+---[ NEGATED CLASSES: $r36-$r37 ]---
+
+$r36: /[^0-9]+/ (not digits)
+Text: hello world no digits here!
+Symbols: @#$%^&*
+
+$r37: /[^a-z]+/ (not lowercase)
+Test: HELLO 123 !@# WORLD
+Mixed: UPPER 123 symbols!
+
+---[ COMPLEX PATTERNS: $r38-$r40 ]---
+
+$r38: /\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/ (IPv4-like)
+IPs: 192.168.1.1 and 10.0.0.1
+More: 127.0.0.1 and 8.8.8.8 and 255.255.255.0
+
+$r39: /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/ (email-like)
+Emails: test@example.com and user123@domain.org
+More: admin@test.co.uk and info@company.com
+
+$r40: /https?:\/\/[^\s]+/ (URL pattern)
+URLs: http://example.com and https://secure.org
+More: https://github.com/user/repo http://test.com/path
+
+---[ REGEX MODIFIERS: $r41-$r42 ]---
+
+$r41: /pattern/i (case insensitive)
+Test: pattern PATTERN Pattern PaTtErN
+All: pattern Pattern PATTERN pAtTeRn
+
+$r42: /multi line/s (dot matches newline)
+Test: multi line text
+More: multi
+line across lines
+
+---[ HEX IN REGEX: $r43-$r44 ]---
+
+$r43: /\x41\x42\x43/ (ABC in hex)
+Test: ABC abc ABC
+Hex: ABC embedded in text ABC
+
+$r44: /test\x20data/ (space as \x20)
+Test: test data here
+More: test data and more test data
+
+---[ MIXED CONTENT: $r45-$r47 ]---
+
+$r45: /version\s+\d+\.\d+\.\d+/ (version number)
+Versions: version 1.0.0 and version 2.3.4
+More: version 10.20.30 release
+
+$r46: /error:\s*.*/ (error message)
+Error: error: something went wrong
+More: error:file not found
+
+$r47: /(\w+)=(\w+)/ (key=value pairs)
+Config: name=value and key=data
+More: user=admin port=8080 host=localhost
+
+---[ GREEDY VS NON-GREEDY: $r48-$r49 ]---
+
+$r48: /a.*?b/ (non-greedy)
+Test: a_short_b and a_longer_string_b
+Both: a1b a2b in same line
+
+$r49: /a.+?b/ (non-greedy one or more)
+Test: a_b and a__b and a___b
+Multiple: a1b a22b a333b
+
+---[ OPTIONAL GROUPS: $r50 ]---
+
+$r50: /(https?:\/\/)?example\.com/ (optional protocol)
+Test: example.com
+With: http://example.com
+Secure: https://example.com
+Both: example.com and https://example.com
+
+---[ EDGE CASES AND STRESS TESTS ]---
+
+Multiple patterns in one line:
+123 hello WORLD Mix3d test pattern 192.168.1.1 test@example.com
+
+Overlapping matches:
+aaabbb testtest catdogbird
+
+Special characters together:
+!@#$%^&*()[]{}\.?+*
+
+Long strings:
+aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab
+
+Boundary conditions:
+^start middle end$
+
+Unicode and extended ASCII:
+1
+café résumé 1naïve
+1
+---[ END OF TEST FILE ]---
+
+Total regex patterns: 50
+Categories:
+  - Character classes: 5 patterns
+  - Quantifiers: 6 patterns
+  - Anchors: 3 patterns
+  - Special chars: 6 patterns
+  - Alternation: 3 patterns
+  - Dot metachar: 3 patterns
+  - Escaped chars: 9 patterns
+  - Negated classes: 2 patterns
+  - Complex patterns: 3 patterns
+  - Modifiers: 2 patterns
+  - Hex in regex: 2 patterns
+  - Mixed content: 3 patterns
+  - Greedy/non-greedy: 2 patterns
+  - Optional groups: 1 pattern
+
+Expected: High match rate with multiple matches per pattern

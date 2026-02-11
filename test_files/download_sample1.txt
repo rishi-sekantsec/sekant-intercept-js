@@ -1,0 +1,3 @@
+This is a sample file downloaded from example.com
+Content: Sensitive information for testing
+Type: Plain text document

@@ -1,0 +1,12 @@
+{
+  "type": "configuration",
+  "settings": {
+    "apiKey": "test-api-key-12345",
+    "endpoint": "https://api.example.com",
+    "enabled": true
+  },
+  "metadata": {
+    "version": "1.0.0",
+    "author": "Test User"
+  }
+}
