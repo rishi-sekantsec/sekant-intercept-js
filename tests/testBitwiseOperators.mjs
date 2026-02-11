@@ -10,8 +10,8 @@
  * - >> (right shift)
  */
 
-import { parseConditionToAST } from '../yaraConditionParser.mjs';
-import { ConditionEvaluator, createScanFacts } from '../yaraConditionsMatch.mjs';
+import { parseConditionToAST } from '../src/yaraConditionParser.mjs';
+import { ConditionEvaluator, createScanFacts } from '../src/yaraConditionsMatch.mjs';
 import { test, assertTrue, printSummary, printSection } from './testingFramework.mjs';
 
 // Helper to create test data

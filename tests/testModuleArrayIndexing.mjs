@@ -3,7 +3,7 @@
  * Tests array indexing like pe.sections[0], elf.sections[1]
  */
 
-import { YaraScanner } from '../yaraScanner.mjs';
+import { InterceptScanner } from '../src/interceptScanner.mjs';
 import { test, assertEquals, assertTrue, assertFalse, printSummary, printSection } from './testingFramework.mjs';
 
 printSection('Module Array Indexing Tests');
@@ -44,7 +44,7 @@ await test('PE sections[0] exists check', async () => {
     }
   `;
   
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(pe);
   
@@ -71,7 +71,7 @@ await test('PE sections[0] virtual_address access', async () => {
     }
   `;
   
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(pe);
   
@@ -96,7 +96,7 @@ await test('PE sections out of bounds', async () => {
     }
   `;
   
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(pe);
   
@@ -122,7 +122,7 @@ await test('PE sections computed index', async () => {
     }
   `;
   
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(pe);
   
@@ -159,7 +159,7 @@ await test('ELF sections[0] exists check', async () => {
     }
   `;
   
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(elf);
   
@@ -183,7 +183,7 @@ await test('ELF sections out of bounds', async () => {
     }
   `;
   
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(elf);
   
@@ -204,7 +204,7 @@ await test('ELF sections with arithmetic index', async () => {
     }
   `;
   
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(elf);
   
@@ -236,7 +236,7 @@ await test('Multiple array accesses in single condition', async () => {
     }
   `;
   
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(pe);
   
@@ -263,7 +263,7 @@ await test('Array indexing with loop variable', async () => {
     }
   `;
   
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(pe);
   
@@ -288,7 +288,7 @@ await test('Non-array property access still works', async () => {
     }
   `;
   
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(pe);
   

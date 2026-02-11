@@ -2,10 +2,10 @@
  * Test boolean literal support in YARA conditions
  */
 
-import { parseConditionToAST } from '../yaraConditionParser.mjs';
-import { ConditionEvaluator, createScanFacts } from '../yaraConditionsMatch.mjs';
+import { parseConditionToAST } from '../src/yaraConditionParser.mjs';
+import { ConditionEvaluator, createScanFacts } from '../src/yaraConditionsMatch.mjs';
 
-function testBooleanLiterals() {
+async function testBooleanLiterals() {
   console.log('Testing Boolean Literals Support\n');
   console.log('='.repeat(50));
   
@@ -66,10 +66,10 @@ function testBooleanLiterals() {
   let passed = 0;
   let failed = 0;
   
-  tests.forEach((test, index) => {
+  for (const [index, test] of tests.entries()) {
     try {
       const ast = parseConditionToAST(test.condition);
-      const result = evaluator.evaluateNode(ast);
+      const result = await evaluator.evaluateNode(ast);
       
       if (result === test.expected) {
         console.log(`✓ Test ${index + 1}: PASSED`);
@@ -89,7 +89,7 @@ function testBooleanLiterals() {
       console.log(`  Error: ${error.message}\n`);
       failed++;
     }
-  });
+  }
   
   console.log('='.repeat(50));
   console.log(`\nResults: ${passed} passed, ${failed} failed out of ${tests.length} tests`);

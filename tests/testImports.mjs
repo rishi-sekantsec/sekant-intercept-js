@@ -6,7 +6,7 @@
  * All supported modules are automatically available, but imports are validated.
  */
 
-import { parseYaraRuleGroup, parseYaraRule } from '../yaraRuleCompiler.mjs';
+import { parseYaraRuleGroup, parseYaraRule } from '../src/yaraRuleCompiler.mjs';
 
 // Test results tracking
 let totalTests = 0;

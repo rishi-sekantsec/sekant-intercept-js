@@ -1,4 +1,4 @@
-import { parseYaraRule } from '../yaraRuleCompiler.mjs';
+import { parseYaraRule } from '../src/yaraRuleCompiler.mjs';
 
 console.log('Testing edge cases for comment handling...\n');
 

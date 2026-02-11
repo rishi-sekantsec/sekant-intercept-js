@@ -3,8 +3,8 @@
  * Tests automatic detection, properties, helper methods, and condition evaluation
  */
 
-import { YaraScanner } from '../yaraScanner.mjs';
-import { parseELFYaraFull as parseELFYara, createELFModule } from '../yaraELFModule.mjs';
+import { InterceptScanner } from '../src/interceptScanner.mjs';
+import { parseELFYaraFull as parseELFYara, createELFModule } from '../src/elfModule.mjs';
 import { test, asyncTest, printSummary, printSection } from './testingFramework.mjs';
 
 // Helper to create minimal valid ELF file
@@ -223,7 +223,7 @@ console.log('-'.repeat(70));
 
 await asyncTest('3.1 Automatic ELF detection', async () => {
   const data = createMinimalELF64();
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   
   const rule = `
     rule ELF_Detected {
@@ -242,7 +242,7 @@ await asyncTest('3.1 Automatic ELF detection', async () => {
 
 await asyncTest('3.2 ELF module automatically available', async () => {
   const data = createMinimalELF64();
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   
   const rule = `
     rule ELF_Entry_Point {
@@ -261,7 +261,7 @@ await asyncTest('3.2 ELF module automatically available', async () => {
 
 await asyncTest('3.3 ELF is_64bit property', async () => {
   const data = createMinimalELF64();
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   
   const rule = `
     rule ELF_64bit {
@@ -280,7 +280,7 @@ await asyncTest('3.3 ELF is_64bit property', async () => {
 
 await asyncTest('3.4 ELF number_of_sections', async () => {
   const data = createMinimalELF64();
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   
   const rule = `
     rule ELF_Sections {
@@ -299,7 +299,7 @@ await asyncTest('3.4 ELF number_of_sections', async () => {
 
 await asyncTest('3.5 Non-ELF file has no ELF module', async () => {
   const data = new TextEncoder().encode('Not an ELF file');
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   
   const rule = `
     rule Not_ELF {
@@ -326,7 +326,7 @@ console.log('-'.repeat(70));
 
 await asyncTest('4.1 Multiple ELF properties (AND)', async () => {
   const data = createMinimalELF64();
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   
   const rule = `
     rule ELF_Multi_Check {
@@ -345,7 +345,7 @@ await asyncTest('4.1 Multiple ELF properties (AND)', async () => {
 
 await asyncTest('4.2 Multiple ELF properties (complex)', async () => {
   const data = createMinimalELF64();
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   
   const rule = `
     rule ELF_Complex {
@@ -366,7 +366,7 @@ await asyncTest('4.2 Multiple ELF properties (complex)', async () => {
 
 await asyncTest('4.3 ELF with magic bytes check', async () => {
   const data = createMinimalELF64();
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   
   const rule = `
     rule ELF_Magic_Check {
@@ -392,7 +392,7 @@ console.log('-'.repeat(70));
 
 await asyncTest('5.1 Access entry_point property', async () => {
   const data = createMinimalELF64();
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   
   const rule = `
     rule Entry_Point_Check {
@@ -411,7 +411,7 @@ await asyncTest('5.1 Access entry_point property', async () => {
 
 await asyncTest('5.2 Access is_64bit property', async () => {
   const data = createMinimalELF64();
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   
   const rule = `
     rule Is_64bit_Check {
@@ -430,7 +430,7 @@ await asyncTest('5.2 Access is_64bit property', async () => {
 
 await asyncTest('5.3 Access number_of_sections property', async () => {
   const data = createMinimalELF64();
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   
   const rule = `
     rule Sections_Count {
@@ -449,7 +449,7 @@ await asyncTest('5.3 Access number_of_sections property', async () => {
 
 await asyncTest('5.4 Access number_of_segments property', async () => {
   const data = createMinimalELF64();
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   
   const rule = `
     rule Segments_Count {

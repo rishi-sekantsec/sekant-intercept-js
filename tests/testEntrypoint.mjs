@@ -1,4 +1,4 @@
-import { YaraScanner } from '../yaraScanner.mjs';
+import { InterceptScanner } from '../src/interceptScanner.mjs';
 import { test, printSummary } from './testingFramework.mjs';
 
 console.log('Testing Entrypoint Identifier\n');
@@ -186,7 +186,7 @@ function createELFFile(entryPoint = 0x401000, addStringAtEntry = false) {
 (async () => {
   // Test 1: Basic entrypoint identifier - PE files
   await test('1.1 PE: entrypoint identifier resolves to correct value', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition: entrypoint == 0x1000
@@ -199,7 +199,7 @@ function createELFFile(entryPoint = 0x401000, addStringAtEntry = false) {
   });
 
   await test('1.2 PE: entrypoint in comparison', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition: entrypoint > 0x500 and entrypoint < 0x2000
@@ -212,7 +212,7 @@ function createELFFile(entryPoint = 0x401000, addStringAtEntry = false) {
   });
 
   await test('1.3 PE: entrypoint with different values', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition: entrypoint == 0x2000
@@ -228,7 +228,7 @@ function createELFFile(entryPoint = 0x401000, addStringAtEntry = false) {
   // Note: entrypoint returns FILE OFFSET, not virtual address
   // ELF virtual address 0x401000 maps to file offset 0x1000 (0x401000 - 0x400000 + 0)
   await test('2.1 ELF: entrypoint identifier resolves to correct file offset', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition: entrypoint == 0x1000
@@ -241,7 +241,7 @@ function createELFFile(entryPoint = 0x401000, addStringAtEntry = false) {
   });
 
   await test('2.2 ELF: entrypoint in comparison (file offset range)', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition: entrypoint > 0x500 and entrypoint < 0x2000
@@ -254,7 +254,7 @@ function createELFFile(entryPoint = 0x401000, addStringAtEntry = false) {
   });
 
   await test('2.3 ELF: entrypoint with different values', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition: entrypoint == 0x2000
@@ -268,7 +268,7 @@ function createELFFile(entryPoint = 0x401000, addStringAtEntry = false) {
 
   // Test 3: String position operators with entrypoint - PE
   await test('3.1 PE: string at entrypoint', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         strings:
@@ -284,7 +284,7 @@ function createELFFile(entryPoint = 0x401000, addStringAtEntry = false) {
   });
 
   await test('3.2 PE: string in range from entrypoint', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         strings:
@@ -300,7 +300,7 @@ function createELFFile(entryPoint = 0x401000, addStringAtEntry = false) {
   });
 
   await test('3.3 PE: string NOT at entrypoint (should not match)', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         strings:
@@ -318,7 +318,7 @@ function createELFFile(entryPoint = 0x401000, addStringAtEntry = false) {
   // Test 4: String position operators with entrypoint - ELF
   // Note: entrypoint returns FILE OFFSET, not virtual address
   await test('4.1 ELF: string found in file can be checked against entrypoint range', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         strings:
@@ -334,7 +334,7 @@ function createELFFile(entryPoint = 0x401000, addStringAtEntry = false) {
   });
 
   await test('4.2 ELF: entrypoint used in complex condition with strings', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         strings:
@@ -350,7 +350,7 @@ function createELFFile(entryPoint = 0x401000, addStringAtEntry = false) {
   });
 
   await test('4.3 ELF: entrypoint comparison with filesize', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition:
@@ -367,7 +367,7 @@ function createELFFile(entryPoint = 0x401000, addStringAtEntry = false) {
 
   // Test 5: Arithmetic with entrypoint
   await test('5.1 PE: entrypoint arithmetic (addition)', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition: entrypoint + 0x100 == 0x1100
@@ -380,7 +380,7 @@ function createELFFile(entryPoint = 0x401000, addStringAtEntry = false) {
   });
 
   await test('5.2 ELF: entrypoint arithmetic (subtraction)', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition: entrypoint - 0x1000 == 0
@@ -393,7 +393,7 @@ function createELFFile(entryPoint = 0x401000, addStringAtEntry = false) {
   });
 
   await test('5.3 PE: entrypoint in data access', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition: uint32(entrypoint) == 0x54534554
@@ -407,7 +407,7 @@ function createELFFile(entryPoint = 0x401000, addStringAtEntry = false) {
 
   // Test 6: Combined with PE module
   await test('6.1 PE: entrypoint matches pe.entry_point', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition: entrypoint == pe.entry_point
@@ -420,7 +420,7 @@ function createELFFile(entryPoint = 0x401000, addStringAtEntry = false) {
   });
 
   await test('6.2 PE: entrypoint used with PE module properties', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition:
@@ -437,7 +437,7 @@ function createELFFile(entryPoint = 0x401000, addStringAtEntry = false) {
 
   // Test 7: Combined with ELF module
   await test('7.1 ELF: entrypoint matches elf.entry_point', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition: entrypoint == elf.entry_point
@@ -450,7 +450,7 @@ function createELFFile(entryPoint = 0x401000, addStringAtEntry = false) {
   });
 
   await test('7.2 ELF: entrypoint used with ELF module properties', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition:
@@ -467,7 +467,7 @@ function createELFFile(entryPoint = 0x401000, addStringAtEntry = false) {
 
   // Test 8: Non-binary files (entrypoint should be 0)
   await test('8.1 Non-binary: entrypoint defaults to 0', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition: entrypoint == 0
@@ -480,7 +480,7 @@ function createELFFile(entryPoint = 0x401000, addStringAtEntry = false) {
   });
 
   await test('8.2 Non-binary: entrypoint is 0 for text files', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition: entrypoint == 0 and filesize > 0
@@ -494,7 +494,7 @@ function createELFFile(entryPoint = 0x401000, addStringAtEntry = false) {
 
   // Test 9: Complex real-world scenarios
   await test('9.1 PE: Malware detection with entrypoint check', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule SuspiciousPE {
         strings:
@@ -513,7 +513,7 @@ function createELFFile(entryPoint = 0x401000, addStringAtEntry = false) {
   });
 
   await test('9.2 ELF: Binary detection with entrypoint check', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule ELFBinary {
         condition:
@@ -529,7 +529,7 @@ function createELFFile(entryPoint = 0x401000, addStringAtEntry = false) {
   });
 
   await test('9.3 PE: Entrypoint in unusual section', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule UnusualEntrypoint {
         condition:
@@ -545,7 +545,7 @@ function createELFFile(entryPoint = 0x401000, addStringAtEntry = false) {
 
   // Test 10: Edge cases
   await test('10.1 PE: Entrypoint at 0', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition: entrypoint == 0
@@ -558,7 +558,7 @@ function createELFFile(entryPoint = 0x401000, addStringAtEntry = false) {
   });
 
   await test('10.2 ELF: Very high entrypoint (converts to file offset)', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition: entrypoint == 0x10000
@@ -571,7 +571,7 @@ function createELFFile(entryPoint = 0x401000, addStringAtEntry = false) {
   });
 
   await test('10.3 PE: Negative check', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition: entrypoint != 0x1000

@@ -12,7 +12,7 @@
  * - Are NOT shown in match output
  */
 
-import { YaraScanner } from '../yaraScanner.mjs';
+import { InterceptScanner } from '../src/interceptScanner.mjs';
 import { test, assertEquals, assertTrue, assertFalse, printSummary, printSection } from './testingFramework.mjs';
 
 // Helper to create test data
@@ -30,8 +30,8 @@ printSection('Anonymous String Support Tests');
 // ============================================================================
 
 await test('1.1 Single anonymous text string', async () => {
-  const scanner = new YaraScanner();
-  scanner.addRule(`
+  const scanner = new InterceptScanner();
+  scanner.addRules(`
     rule Test {
       strings:
         $ = "malware"
@@ -53,8 +53,8 @@ await test('1.1 Single anonymous text string', async () => {
 });
 
 await test('1.2 Multiple anonymous strings', async () => {
-  const scanner = new YaraScanner();
-  scanner.addRule(`
+  const scanner = new InterceptScanner();
+  scanner.addRules(`
     rule Test {
       strings:
         $ = "evil"
@@ -75,8 +75,8 @@ await test('1.2 Multiple anonymous strings', async () => {
 });
 
 await test('1.3 Mix of anonymous and named strings', async () => {
-  const scanner = new YaraScanner();
-  scanner.addRule(`
+  const scanner = new InterceptScanner();
+  scanner.addRules(`
     rule Test {
       strings:
         $named = "important"
@@ -107,8 +107,8 @@ await test('1.3 Mix of anonymous and named strings', async () => {
 // ============================================================================
 
 await test('2.1 Anonymous string with nocase', async () => {
-  const scanner = new YaraScanner();
-  scanner.addRule(`
+  const scanner = new InterceptScanner();
+  scanner.addRules(`
     rule Test {
       strings:
         $ = "MALWARE" nocase
@@ -124,8 +124,8 @@ await test('2.1 Anonymous string with nocase', async () => {
 });
 
 await test('2.2 Anonymous string with wide', async () => {
-  const scanner = new YaraScanner();
-  scanner.addRule(`
+  const scanner = new InterceptScanner();
+  scanner.addRules(`
     rule Test {
       strings:
         $ = "test" wide
@@ -141,8 +141,8 @@ await test('2.2 Anonymous string with wide', async () => {
 });
 
 await test('2.3 Anonymous string with multiple modifiers', async () => {
-  const scanner = new YaraScanner();
-  scanner.addRule(`
+  const scanner = new InterceptScanner();
+  scanner.addRules(`
     rule Test {
       strings:
         $ = "MALWARE" nocase wide
@@ -166,8 +166,8 @@ await test('2.3 Anonymous string with multiple modifiers', async () => {
 // ============================================================================
 
 await test('3.1 Anonymous hex pattern', async () => {
-  const scanner = new YaraScanner();
-  scanner.addRule(`
+  const scanner = new InterceptScanner();
+  scanner.addRules(`
     rule Test {
       strings:
         $ = { 4D 5A }
@@ -183,8 +183,8 @@ await test('3.1 Anonymous hex pattern', async () => {
 });
 
 await test('3.2 Anonymous hex with wildcards', async () => {
-  const scanner = new YaraScanner();
-  scanner.addRule(`
+  const scanner = new InterceptScanner();
+  scanner.addRules(`
     rule Test {
       strings:
         $ = { 4D ?? 90 }
@@ -204,8 +204,8 @@ await test('3.2 Anonymous hex with wildcards', async () => {
 // ============================================================================
 
 await test('4.1 Anonymous regex', async () => {
-  const scanner = new YaraScanner();
-  scanner.addRule(`
+  const scanner = new InterceptScanner();
+  scanner.addRules(`
     rule Test {
       strings:
         $ = /evil[0-9]+/
@@ -221,8 +221,8 @@ await test('4.1 Anonymous regex', async () => {
 });
 
 await test('4.2 Anonymous regex with case-insensitive flag', async () => {
-  const scanner = new YaraScanner();
-  scanner.addRule(`
+  const scanner = new InterceptScanner();
+  scanner.addRules(`
     rule Test {
       strings:
         $ = /MALWARE/i
@@ -242,8 +242,8 @@ await test('4.2 Anonymous regex with case-insensitive flag', async () => {
 // ============================================================================
 
 await test('5.1 "any of them" with anonymous strings', async () => {
-  const scanner = new YaraScanner();
-  scanner.addRule(`
+  const scanner = new InterceptScanner();
+  scanner.addRules(`
     rule Test {
       strings:
         $ = "pattern1"
@@ -261,8 +261,8 @@ await test('5.1 "any of them" with anonymous strings', async () => {
 });
 
 await test('5.2 "all of them" with anonymous strings', async () => {
-  const scanner = new YaraScanner();
-  scanner.addRule(`
+  const scanner = new InterceptScanner();
+  scanner.addRules(`
     rule Test {
       strings:
         $ = "pattern1"
@@ -279,8 +279,8 @@ await test('5.2 "all of them" with anonymous strings', async () => {
 });
 
 await test('5.3 "N of them" with anonymous strings', async () => {
-  const scanner = new YaraScanner();
-  scanner.addRule(`
+  const scanner = new InterceptScanner();
+  scanner.addRules(`
     rule Test {
       strings:
         $ = "pattern1"
@@ -299,8 +299,8 @@ await test('5.3 "N of them" with anonymous strings', async () => {
 });
 
 await test('5.4 "N of them" fails when threshold not met', async () => {
-  const scanner = new YaraScanner();
-  scanner.addRule(`
+  const scanner = new InterceptScanner();
+  scanner.addRules(`
     rule Test {
       strings:
         $ = "pattern1"
@@ -322,8 +322,8 @@ await test('5.4 "N of them" fails when threshold not met', async () => {
 // ============================================================================
 
 await test('6.1 Malware IOC list with anonymous strings', async () => {
-  const scanner = new YaraScanner();
-  scanner.addRule(`
+  const scanner = new InterceptScanner();
+  scanner.addRules(`
     rule Malware_IOCs {
       strings:
         $ = "CreateRemoteThread"
@@ -345,8 +345,8 @@ await test('6.1 Malware IOC list with anonymous strings', async () => {
 });
 
 await test('6.2 Mixed anonymous and named for important markers', async () => {
-  const scanner = new YaraScanner();
-  scanner.addRule(`
+  const scanner = new InterceptScanner();
+  scanner.addRules(`
     rule Ransomware {
       strings:
         $encrypt = "CryptEncrypt" nocase
@@ -373,8 +373,8 @@ await test('6.2 Mixed anonymous and named for important markers', async () => {
 // ============================================================================
 
 await test('7.1 Only anonymous strings in rule', async () => {
-  const scanner = new YaraScanner();
-  scanner.addRule(`
+  const scanner = new InterceptScanner();
+  scanner.addRules(`
     rule Test {
       strings:
         $ = "test1"
@@ -394,8 +394,8 @@ await test('7.1 Only anonymous strings in rule', async () => {
 });
 
 await test('7.2 No match should have empty strings object', async () => {
-  const scanner = new YaraScanner();
-  scanner.addRule(`
+  const scanner = new InterceptScanner();
+  scanner.addRules(`
     rule Test {
       strings:
         $ = "notfound"
@@ -411,8 +411,8 @@ await test('7.2 No match should have empty strings object', async () => {
 });
 
 await test('7.3 Anonymous string at different positions', async () => {
-  const scanner = new YaraScanner();
-  scanner.addRule(`
+  const scanner = new InterceptScanner();
+  scanner.addRules(`
     rule Test {
       strings:
         $a = "start"

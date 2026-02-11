@@ -6,7 +6,7 @@
  */
 
 import { test, assertEquals, assertTrue, assertFalse, printSummary, printSection } from './testingFramework.mjs';
-import { YaraScanner } from '../yaraScanner.mjs';
+import { InterceptScanner } from '../src/interceptScanner.mjs';
 
 printSection('Enhanced String Set Operations Tests');
 
@@ -30,7 +30,7 @@ await test('none of them - no strings match', async () => {
   `;
   
   const data = Buffer.from('clean file with no bad strings');
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
   
@@ -51,7 +51,7 @@ await test('none of them - some strings match (should not match rule)', async ()
   `;
   
   const data = Buffer.from('clean file');
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
   
@@ -70,7 +70,7 @@ await test('none of them - all strings match (should not match rule)', async () 
   `;
   
   const data = Buffer.from('bad file');
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
   
@@ -98,7 +98,7 @@ await test('none of ($api*) - no API strings match', async () => {
   `;
   
   const data = Buffer.from('Hello World');
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
   
@@ -118,7 +118,7 @@ await test('none of ($api*) - some API strings match', async () => {
   `;
   
   const data = Buffer.from('Call CreateProcess now');
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
   
@@ -140,7 +140,7 @@ await test('none of ($bad*, $virus*) - multiple wildcard patterns', async () => 
   `;
   
   const data = Buffer.from('clean data only');
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
   
@@ -168,7 +168,7 @@ await test('2..3 of them - exactly 2 strings match', async () => {
   `;
   
   const data = Buffer.from('alpha beta');
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
   
@@ -189,7 +189,7 @@ await test('2..3 of them - exactly 3 strings match', async () => {
   `;
   
   const data = Buffer.from('one two three');
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
   
@@ -209,7 +209,7 @@ await test('2..3 of them - only 1 string matches (below range)', async () => {
   `;
   
   const data = Buffer.from('alpha only');
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
   
@@ -230,7 +230,7 @@ await test('2..3 of them - 4 strings match (above range)', async () => {
   `;
   
   const data = Buffer.from('a b c d');
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
   
@@ -249,7 +249,7 @@ await test('1..1 of them - exactly one match required', async () => {
   `;
   
   const data = Buffer.from('target');
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
   
@@ -268,7 +268,7 @@ await test('0..2 of them - zero to two matches', async () => {
   `;
   
   const data = Buffer.from('unrelated content');
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
   
@@ -297,7 +297,7 @@ await test('2..3 of ($api*) - wildcard with range', async () => {
   `;
   
   const data = Buffer.from('CreateProcess and OpenFile calls');
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
   
@@ -319,7 +319,7 @@ await test('2..4 of ($enc*, $crypto*) - multiple wildcards with range', async ()
   `;
   
   const data = Buffer.from('AES DES CryptoKey found');
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
   
@@ -339,7 +339,7 @@ await test('1..2 of ($mal*) - below minimum for range', async () => {
   `;
   
   const data = Buffer.from('MalAPI1 only');
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
   
@@ -369,7 +369,7 @@ await test('50% of ($api*) - percentage with wildcard', async () => {
   
   // 2 out of 4 API strings = 50%
   const data = Buffer.from('API1 and API2');
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
   
@@ -391,7 +391,7 @@ await test('75% of ($sig*) - high percentage threshold', async () => {
   
   // Need 3 out of 4 (75%)
   const data = Buffer.from('SIG1 SIG2 SIG3');
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
   
@@ -414,7 +414,7 @@ await test('80% of ($enc*) - not enough matches', async () => {
   
   // Only 2 out of 5 = 40%, need 80%
   const data = Buffer.from('ENC1 ENC2');
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
   
@@ -444,7 +444,7 @@ await test('Complex: range + wildcard + logical operators', async () => {
   `;
   
   const data = Buffer.from('CreateFile WriteFile safe');
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
   
@@ -467,7 +467,7 @@ await test('Complex: multiple range conditions', async () => {
   `;
   
   const data = Buffer.from('socket open read write');
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
   
@@ -490,7 +490,7 @@ await test('Complex: none + percentage + range', async () => {
   `;
   
   const data = Buffer.from('valid safe content');
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
   
@@ -509,7 +509,7 @@ await test('Edge case: empty wildcard match', async () => {
   `;
   
   const data = Buffer.from('test data');
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
   
@@ -528,7 +528,7 @@ await test('Edge case: range 0..0 (must match exactly zero)', async () => {
   `;
   
   const data = Buffer.from('clean file');
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
   
@@ -548,7 +548,7 @@ await test('Edge case: large range 1..100', async () => {
   `;
   
   const data = Buffer.from('one two');
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
   

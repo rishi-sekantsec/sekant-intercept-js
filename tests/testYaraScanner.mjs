@@ -10,8 +10,8 @@
  * 6. Final result generation
  */
 
-import { YaraScanner } from '../yaraScanner.mjs';
-import { createMathModule } from '../yaraMathModule.mjs';
+import { InterceptScanner } from '../src/interceptScanner.mjs';
+import { createMathModule } from '../src/mathModule.mjs';
 import { 
   numberedTest as test,
   assertEquals,
@@ -33,14 +33,14 @@ async function runTests() {
   console.log('\n=== Section 1: Basic Scanner Functionality ===\n');
 
   await test('Scanner initialization', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   assertTrue(scanner !== null);
   const stats = scanner.getStats();
   assertEquals(stats.totalRules, 0);
 });
 
 await test('Add simple rule', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   const rule = `
     rule TestRule {
       strings:
@@ -55,7 +55,7 @@ await test('Add simple rule', async () => {
 });
 
 await test('Add multiple rules', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   const rules = `
     rule Rule1 {
       strings:
@@ -77,7 +77,7 @@ await test('Add multiple rules', async () => {
 });
 
 await test('Clear scanner', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules('rule Test { strings: $a = "x" condition: $a }');
   scanner.clear();
   const stats = scanner.getStats();
@@ -91,7 +91,7 @@ await test('Clear scanner', async () => {
 console.log('\n=== Section 2: Simple String Matching ===\n');
 
 await test('Match simple text string', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   const rule = `
     rule SimpleMatch {
       strings:
@@ -110,7 +110,7 @@ await test('Match simple text string', async () => {
 });
 
 await test('No match when string not present', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   const rule = `
     rule NoMatch {
       strings:
@@ -128,7 +128,7 @@ await test('No match when string not present', async () => {
 });
 
 await test('Match multiple strings', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   const rule = `
     rule MultiString {
       strings:
@@ -148,7 +148,7 @@ await test('Match multiple strings', async () => {
 });
 
 await test('Case-insensitive matching with nocase', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   const rule = `
     rule CaseInsensitive {
       strings:
@@ -173,7 +173,7 @@ await test('Case-insensitive matching with nocase', async () => {
 console.log('\n=== Section 3: Quantifier Conditions ===\n');
 
 await test('any of them - at least one match', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   const rule = `
     rule AnyOfThem {
       strings:
@@ -194,7 +194,7 @@ await test('any of them - at least one match', async () => {
 });
 
 await test('all of them - all must match', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   const rule = `
     rule AllOfThem {
       strings:
@@ -214,7 +214,7 @@ await test('all of them - all must match', async () => {
 });
 
 await test('all of them - fails when not all match', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   const rule = `
     rule AllRequired {
       strings:
@@ -233,7 +233,7 @@ await test('all of them - fails when not all match', async () => {
 });
 
 await test('N of them - exactly N strings', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   const rule = `
     rule TwoOfThem {
       strings:
@@ -260,7 +260,7 @@ await test('N of them - exactly N strings', async () => {
 console.log('\n=== Section 4: Logical Operators ===\n');
 
 await test('AND operator - both conditions required', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   const rule = `
     rule AndCondition {
       strings:
@@ -279,7 +279,7 @@ await test('AND operator - both conditions required', async () => {
 });
 
 await test('OR operator - either condition sufficient', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   const rule = `
     rule OrCondition {
       strings:
@@ -298,7 +298,7 @@ await test('OR operator - either condition sufficient', async () => {
 });
 
 await test('NOT operator - negates condition', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   const rule = `
     rule NotCondition {
       strings:
@@ -323,7 +323,7 @@ await test('NOT operator - negates condition', async () => {
 console.log('\n=== Section 5: Multiple Rules ===\n');
 
 await test('Multiple rules - different matches', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   const rules = `
     rule Rule1 {
       strings:
@@ -351,7 +351,7 @@ await test('Multiple rules - different matches', async () => {
 });
 
 await test('Multiple rules - selective matching', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   const rules = `
     rule MatchThis {
       strings:
@@ -383,7 +383,7 @@ await test('Multiple rules - selective matching', async () => {
 console.log('\n=== Section 6: Hex Patterns ===\n');
 
 await test('Match hex pattern', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   const rule = `
     rule HexPattern {
       strings:
@@ -402,7 +402,7 @@ await test('Match hex pattern', async () => {
 });
 
 await test('Match hex with wildcards', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   const rule = `
     rule HexWildcard {
       strings:
@@ -426,7 +426,7 @@ await test('Match hex with wildcards', async () => {
 console.log('\n=== Section 7: Regular Expressions ===\n');
 
 await test('Match regex pattern', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   const rule = `
     rule RegexPattern {
       strings:
@@ -445,7 +445,7 @@ await test('Match regex pattern', async () => {
 });
 
 await test('Regex case-insensitive flag', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   const rule = `
     rule RegexNoCase {
       strings:
@@ -469,7 +469,7 @@ await test('Regex case-insensitive flag', async () => {
 console.log('\n=== Section 8: Real-World PE Detection ===\n');
 
 await test('Detect PE file signature', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   const rule = `
     rule IsPE {
       strings:
@@ -491,7 +491,7 @@ await test('Detect PE file signature', async () => {
 });
 
 await test('PE with suspicious strings', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   const rule = `
     rule SuspiciousPE {
       strings:
@@ -525,7 +525,7 @@ await test('PE with suspicious strings', async () => {
 console.log('\n=== Section 9: Module Integration ===\n');
 
 await test('Math module integration', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   
   // Create test data with high entropy section
   const data = new Uint8Array(2000);
@@ -559,7 +559,7 @@ await test('Math module integration', async () => {
 console.log('\n=== Section 10: Performance & Edge Cases ===\n');
 
 await test('Empty data', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   const rule = `
     rule EmptyTest {
       strings:
@@ -577,7 +577,7 @@ await test('Empty data', async () => {
 });
 
 await test('Large data scan', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   const rule = `
     rule LargeDataTest {
       strings:
@@ -602,7 +602,7 @@ await test('Large data scan', async () => {
 });
 
 await test('String input conversion', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   const rule = `
     rule StringInput {
       strings:
@@ -620,7 +620,7 @@ await test('String input conversion', async () => {
 });
 
 await test('Multiple occurrences of same string', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   const rule = `
     rule MultiOccurrence {
       strings:
@@ -643,7 +643,7 @@ await test('Multiple occurrences of same string', async () => {
 });
 
 await test('Overlapping patterns', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   const rules = `
     rule Pattern1 {
       strings:
@@ -674,7 +674,7 @@ await test('Overlapping patterns', async () => {
 console.log('\n=== Section 11: Complex Malware Detection ===\n');
 
 await test('Ransomware indicators', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   const rule = `
     rule Ransomware {
       strings:
@@ -696,7 +696,7 @@ await test('Ransomware indicators', async () => {
 });
 
 await test('Backdoor detection', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   const rule = `
     rule Backdoor {
       strings:

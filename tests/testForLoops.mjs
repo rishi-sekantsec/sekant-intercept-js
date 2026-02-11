@@ -9,8 +9,8 @@
  * - for any/all of ($pattern*) : (condition)
  */
 
-import { createScanFacts, ConditionEvaluator } from '../yaraConditionsMatch.mjs';
-import { parseConditionToAST } from '../yaraConditionParser.mjs';
+import { createScanFacts, ConditionEvaluator } from '../src/yaraConditionsMatch.mjs';
+import { parseConditionToAST } from '../src/yaraConditionParser.mjs';
 import { test, assertTrue, assertFalse, assertEquals, printSummary, printSection } from './testingFramework.mjs';
 
 // Helper to create test data

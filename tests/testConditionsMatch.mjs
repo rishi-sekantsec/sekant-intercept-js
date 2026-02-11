@@ -14,7 +14,7 @@
  * - Module integration
  */
 
-import { createScanFacts, ConditionEvaluator, evaluateCondition, evaluateRules } from '../yaraConditionsMatch.mjs';
+import { createScanFacts, ConditionEvaluator, evaluateCondition, evaluateRules } from '../src/yaraConditionsMatch.mjs';
 import {
   numberedTest as test,
   assertEquals,

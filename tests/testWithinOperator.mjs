@@ -10,7 +10,7 @@
  * (measured from start offset to start offset).
  */
 
-import { YaraScanner } from '../yaraScanner.mjs';
+import { InterceptScanner } from '../src/interceptScanner.mjs';
 import { 
   test, 
   assertEquals, 
@@ -53,7 +53,7 @@ await test('1.1 Strings within distance (exact)', async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -74,7 +74,7 @@ await test('1.2 Strings within distance (below threshold)', async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -95,7 +95,7 @@ await test('1.3 Strings NOT within distance', async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -115,7 +115,7 @@ await test('1.4 Using "bytes" keyword (optional)', async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -136,7 +136,7 @@ await test('1.5 Zero distance (overlapping strings)', async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -166,7 +166,7 @@ await test('2.1 Multiple occurrences - any within', async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -189,7 +189,7 @@ await test('2.2 Multiple occurrences - none within', async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -212,7 +212,7 @@ await test('2.3 Multiple occurrences of both strings', async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -233,7 +233,7 @@ await test('2.4 Overlapping string matches', async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -261,7 +261,7 @@ await test('3.1 Within works when $a before $b', async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -282,7 +282,7 @@ await test('3.2 Within works when $a after $b', async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -302,7 +302,7 @@ await test('3.3 Symmetric bidirectional check', async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -330,7 +330,7 @@ await test('4.1 Combine within with and', async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -351,7 +351,7 @@ await test('4.2 Combine within with or', async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -371,7 +371,7 @@ await test('4.3 Negation - not within', async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -393,7 +393,7 @@ await test('4.4 Three-way proximity check', async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -421,7 +421,7 @@ await test('5.1 API call clustering', async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -444,7 +444,7 @@ await test('5.2 Code injection pattern detection', async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -466,7 +466,7 @@ await test('5.3 Credential harvesting keywords proximity', async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -490,7 +490,7 @@ await test('5.4 Crypto algorithm clustering', async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -515,7 +515,7 @@ await test('5.5 Network communication pattern', async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -542,7 +542,7 @@ await test('6.1 String not found - within fails', async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -562,7 +562,7 @@ await test('6.2 Both strings not found', async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -583,7 +583,7 @@ await test('6.3 Very large distance threshold', async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -603,7 +603,7 @@ await test('6.4 Distance of 1 byte', async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -623,7 +623,7 @@ await test('6.5 Adjacent strings (no gap)', async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -642,7 +642,7 @@ await test('6.6 Same string as both operands', async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -670,7 +670,7 @@ await test('7.1 Many occurrences stress test', async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -690,7 +690,7 @@ await test('7.2 Regex patterns with within', async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -710,7 +710,7 @@ await test('7.3 Hex patterns with within', async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -737,7 +737,7 @@ await test('8.1 Combine within and at', async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -757,7 +757,7 @@ await test('8.2 Combine within and in', async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -777,7 +777,7 @@ await test('8.3 Combine within and offset @', async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -797,7 +797,7 @@ await test('8.4 Combine within and length !', async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -819,7 +819,7 @@ await test('8.5 Combine within and for loop', async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 

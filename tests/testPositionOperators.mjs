@@ -3,7 +3,7 @@
  * Tests: at, in, @, ! operators
  */
 
-import { YaraScanner } from '../yaraScanner.mjs';
+import { InterceptScanner } from '../src/interceptScanner.mjs';
 import { test, printSummary, printSection } from './testingFramework.mjs';
 
 // Create clean test data with known offsets
@@ -13,7 +13,7 @@ const data = new TextEncoder().encode(dataStr);
 
 async function testPositionOp(name, rule, shouldMatch) {
   await test(name, async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     scanner.addRules(rule);
     const results = await scanner.scan(data);
     const matched = results.length > 0;

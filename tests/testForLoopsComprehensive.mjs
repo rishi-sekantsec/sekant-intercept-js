@@ -12,8 +12,8 @@
  * - Unicode and special characters
  */
 
-import { createScanFacts, ConditionEvaluator } from '../yaraConditionsMatch.mjs';
-import { parseConditionToAST } from '../yaraConditionParser.mjs';
+import { createScanFacts, ConditionEvaluator } from '../src/yaraConditionsMatch.mjs';
+import { parseConditionToAST } from '../src/yaraConditionParser.mjs';
 import {
   test,
   assertTrue,

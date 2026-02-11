@@ -5,7 +5,7 @@
  * including special handling for capped files.
  */
 
-import { YaraScanner } from '../yaraScanner.mjs';
+import { InterceptScanner } from '../src/interceptScanner.mjs';
 import { test, assertTrue, printSummary, printSection } from './testingFramework.mjs';
 
 function assert(condition, message) {
@@ -18,7 +18,7 @@ printSection('Filesize Operator Tests');
 
 // Test 1: Basic filesize comparison
 await test('filesize == exact size', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     rule FilesizeExact {
       condition:
@@ -35,7 +35,7 @@ await test('filesize == exact size', async () => {
 
 // Test 2: filesize greater than
 await test('filesize > N', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     rule FilesizeGreater {
       condition:
@@ -51,7 +51,7 @@ await test('filesize > N', async () => {
 
 // Test 3: filesize less than
 await test('filesize < N', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     rule FilesizeLess {
       condition:
@@ -67,7 +67,7 @@ await test('filesize < N', async () => {
 
 // Test 4: filesize range check
 await test('filesize between range', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     rule FilesizeRange {
       condition:
@@ -83,7 +83,7 @@ await test('filesize between range', async () => {
 
 // Test 5: filesize with KB units
 await test('filesize > 1KB', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     rule FilesizeKB {
       condition:
@@ -99,7 +99,7 @@ await test('filesize > 1KB', async () => {
 
 // Test 6: Capped file - filesize == cap
 await test('Capped file: filesize == maxFileSize', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.setMaxFileSize(1024); // 1KB cap
   
   scanner.addRules(`
@@ -117,7 +117,7 @@ await test('Capped file: filesize == maxFileSize', async () => {
 
 // Test 7: Capped file - filesize > cap (should match)
 await test('Capped file: filesize > maxFileSize (assumes true)', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.setMaxFileSize(1024); // 1KB cap
   
   scanner.addRules(`
@@ -135,7 +135,7 @@ await test('Capped file: filesize > maxFileSize (assumes true)', async () => {
 
 // Test 8: Capped file - filesize >= cap (should match)
 await test('Capped file: filesize >= maxFileSize (assumes true)', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.setMaxFileSize(1024); // 1KB cap
   
   scanner.addRules(`
@@ -153,7 +153,7 @@ await test('Capped file: filesize >= maxFileSize (assumes true)', async () => {
 
 // Test 9: Capped file - filesize < cap (uses actual value)
 await test('Capped file: filesize < maxFileSize (uses actual)', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.setMaxFileSize(1024); // 1KB cap
   
   scanner.addRules(`
@@ -171,7 +171,7 @@ await test('Capped file: filesize < maxFileSize (uses actual)', async () => {
 
 // Test 10: Capped file - filesize == large value (should match)
 await test('Capped file: filesize == large value (assumes true)', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.setMaxFileSize(1024); // 1KB cap
   
   scanner.addRules(`
@@ -189,7 +189,7 @@ await test('Capped file: filesize == large value (assumes true)', async () => {
 
 // Test 11: Non-capped file - normal comparisons
 await test('Non-capped file: normal filesize comparisons', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.setMaxFileSize(2048); // 2KB cap
   
   scanner.addRules(`
@@ -207,7 +207,7 @@ await test('Non-capped file: normal filesize comparisons', async () => {
 
 // Test 12: Multiple filesize conditions
 await test('Multiple filesize conditions with AND', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     rule FilesizeMultiple {
       condition:
@@ -223,7 +223,7 @@ await test('Multiple filesize conditions with AND', async () => {
 
 // Test 13: filesize with string match
 await test('filesize combined with string match', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     rule FilesizeAndString {
       strings:
@@ -241,7 +241,7 @@ await test('filesize combined with string match', async () => {
 
 // Test 14: filesize <= comparison
 await test('filesize <= N', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     rule FilesizeLessOrEqual {
       condition:
@@ -257,7 +257,7 @@ await test('filesize <= N', async () => {
 
 // Test 15: filesize >= comparison
 await test('filesize >= N', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     rule FilesizeGreaterOrEqual {
       condition:

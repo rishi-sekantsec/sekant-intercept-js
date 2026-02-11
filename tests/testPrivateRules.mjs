@@ -6,7 +6,7 @@
  * but won't appear in the final output.
  */
 
-import { YaraScanner } from '../yaraScanner.mjs';
+import { InterceptScanner } from '../src/interceptScanner.mjs';
 import { test, printSummary, printSection } from './testingFramework.mjs';
 
 printSection('Private Rules Tests');
@@ -16,7 +16,7 @@ printSection('Private Rules Tests');
 // ======================================================================
 
 await test('1.1 Private rule matches but not in output', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     private rule PrivateRule {
       strings:
@@ -35,7 +35,7 @@ await test('1.1 Private rule matches but not in output', async () => {
 });
 
 await test('1.2 Regular rule appears in output', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     rule PublicRule {
       strings:
@@ -56,7 +56,7 @@ await test('1.2 Regular rule appears in output', async () => {
 });
 
 await test('1.3 Mix of private and public rules', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     private rule PrivateRule {
       strings:
@@ -89,7 +89,7 @@ await test('1.3 Mix of private and public rules', async () => {
 // ======================================================================
 
 await test('2.1 Private rule with tags', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     private rule PrivateTaggedRule : tag1 tag2 {
       strings:
@@ -107,7 +107,7 @@ await test('2.1 Private rule with tags', async () => {
 });
 
 await test('2.2 Mix of private and public tagged rules', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     private rule PrivateTagged : malware {
       strings:
@@ -142,7 +142,7 @@ await test('2.2 Mix of private and public tagged rules', async () => {
 // ======================================================================
 
 await test('3.1 Private rule with metadata', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     private rule PrivateWithMeta {
       meta:
@@ -167,7 +167,7 @@ await test('3.1 Private rule with metadata', async () => {
 // ======================================================================
 
 await test('4.1 Private rule with multiple strings', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     private rule PrivateMultiString {
       strings:
@@ -187,7 +187,7 @@ await test('4.1 Private rule with multiple strings', async () => {
 });
 
 await test('4.2 Private rule with hex patterns', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     private rule PrivateHex {
       strings:
@@ -205,7 +205,7 @@ await test('4.2 Private rule with hex patterns', async () => {
 });
 
 await test('4.3 Private rule with regex', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     private rule PrivateRegex {
       strings:
@@ -227,7 +227,7 @@ await test('4.3 Private rule with regex', async () => {
 // ======================================================================
 
 await test('5.1 Multiple private rules, none in output', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     private rule Private1 {
       strings:
@@ -259,7 +259,7 @@ await test('5.1 Multiple private rules, none in output', async () => {
 });
 
 await test('5.2 Mix of multiple private and public rules', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     private rule Private1 {
       strings:
@@ -307,7 +307,7 @@ await test('5.2 Mix of multiple private and public rules', async () => {
 // ======================================================================
 
 await test('6.1 Private rule with filesize check', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     private rule PrivateFilesize {
       strings:
@@ -325,8 +325,8 @@ await test('6.1 Private rule with filesize check', async () => {
 });
 
 await test('6.2 Private rule with hash module', async () => {
-  const scanner = new YaraScanner();
-  const { createHashModule } = await import('../yaraHashModule.mjs');
+  const scanner = new InterceptScanner();
+  const { createHashModule } = await import('../src/hashModule.mjs');
   
   const data = new TextEncoder().encode('test data');
   const hashModule = createHashModule(data);
@@ -353,7 +353,7 @@ await test('6.2 Private rule with hash module', async () => {
 // ======================================================================
 
 await test('7.1 Private rule that does not match', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     private rule PrivateNoMatch {
       strings:
@@ -371,7 +371,7 @@ await test('7.1 Private rule that does not match', async () => {
 });
 
 await test('7.2 Only private rules in file, all matching', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     private rule Private1 {
       strings:
@@ -396,7 +396,7 @@ await test('7.2 Only private rules in file, all matching', async () => {
 });
 
 await test('7.3 Private rule with anonymous strings', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     private rule PrivateAnonymous {
       strings:
@@ -415,7 +415,7 @@ await test('7.3 Private rule with anonymous strings', async () => {
 });
 
 await test('7.4 Private keyword case sensitivity', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     private rule LowerCase {
       strings:

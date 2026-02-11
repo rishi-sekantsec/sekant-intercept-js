@@ -1,4 +1,4 @@
-import { YaraScanner } from '../yaraScanner.mjs';
+import { InterceptScanner } from '../src/interceptScanner.mjs';
 import { test, printSummary, printSection } from './testingFramework.mjs';
 
 /**
@@ -11,7 +11,7 @@ printSection('Data Access Functions Test Suite');
 async function runTests() {
   // Test 1: uint8 - unsigned 8-bit integer
   await test('1.1 uint8() reads single byte', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition: uint8(0) == 0x4D
@@ -26,7 +26,7 @@ async function runTests() {
   });
 
   await test('1.2 uint8() at different offsets', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition: uint8(0) == 0x4D and uint8(1) == 0x5A and uint8(2) == 0x90
@@ -39,7 +39,7 @@ async function runTests() {
   });
 
   await test('1.3 uint8() range check (0-255)', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition: uint8(0) >= 0 and uint8(0) <= 255
@@ -53,7 +53,7 @@ async function runTests() {
 
   // Test 2: uint16 - unsigned 16-bit integer (little-endian)
   await test('2.1 uint16() reads two bytes (little-endian)', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition: uint16(0) == 0x5A4D
@@ -66,7 +66,7 @@ async function runTests() {
   });
 
   await test('2.2 uint16() at different offsets', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition: uint16(0) == 0x5A4D and uint16(2) == 0xFFFF
@@ -79,7 +79,7 @@ async function runTests() {
   });
 
   await test('2.3 uint16() with large values', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition: uint16(0) == 65535
@@ -93,7 +93,7 @@ async function runTests() {
 
   // Test 3: uint32 - unsigned 32-bit integer (little-endian)
   await test('3.1 uint32() reads four bytes (little-endian)', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition: uint32(0) == 0x00004D5A
@@ -106,7 +106,7 @@ async function runTests() {
   });
 
   await test('3.2 uint32() PE signature check', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition: uint32(0) == 0x00004550
@@ -119,7 +119,7 @@ async function runTests() {
   });
 
   await test('3.3 uint32() with large values', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition: uint32(0) == 4294967295
@@ -133,7 +133,7 @@ async function runTests() {
 
   // Test 4: int8 - signed 8-bit integer
   await test('4.1 int8() reads signed byte (positive)', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition: int8(0) == 127
@@ -146,7 +146,7 @@ async function runTests() {
   });
 
   await test('4.2 int8() reads signed byte (negative)', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition: int8(0) == -1
@@ -159,7 +159,7 @@ async function runTests() {
   });
 
   await test('4.3 int8() reads signed byte (negative -128)', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition: int8(0) == -128
@@ -173,7 +173,7 @@ async function runTests() {
 
   // Test 5: int16 - signed 16-bit integer (little-endian)
   await test('5.1 int16() reads signed 16-bit (positive)', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition: int16(0) == 32767
@@ -186,7 +186,7 @@ async function runTests() {
   });
 
   await test('5.2 int16() reads signed 16-bit (negative)', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition: int16(0) == -1
@@ -199,7 +199,7 @@ async function runTests() {
   });
 
   await test('5.3 int16() reads signed 16-bit (negative -32768)', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition: int16(0) == -32768
@@ -213,7 +213,7 @@ async function runTests() {
 
   // Test 6: int32 - signed 32-bit integer (little-endian)
   await test('6.1 int32() reads signed 32-bit (positive)', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition: int32(0) == 2147483647
@@ -226,7 +226,7 @@ async function runTests() {
   });
 
   await test('6.2 int32() reads signed 32-bit (negative)', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition: int32(0) == -1
@@ -239,7 +239,7 @@ async function runTests() {
   });
 
   await test('6.3 int32() reads signed 32-bit (negative -2147483648)', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition: int32(0) == -2147483648
@@ -253,7 +253,7 @@ async function runTests() {
 
   // Test 7: Combined data access
   await test('7.1 Combined uint8, uint16, uint32 check', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition:
@@ -269,7 +269,7 @@ async function runTests() {
   });
 
   await test('7.2 Mixed signed and unsigned checks', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition:
@@ -287,7 +287,7 @@ async function runTests() {
 
   // Test 8: Offset calculations
   await test('8.1 Data access with calculated offset', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition: uint8(2 + 1) == 0xAA
@@ -300,7 +300,7 @@ async function runTests() {
   });
 
   await test('8.2 Data access with variable offset', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition: uint16(uint8(0)) == 0x5A4D
@@ -314,7 +314,7 @@ async function runTests() {
 
   // Test 9: Boundary checks
   await test('9.1 Access at end of data', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition: uint8(3) == 0xFF
@@ -327,7 +327,7 @@ async function runTests() {
   });
 
   await test('9.2 Out of bounds access returns no match', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition: uint8(10) == 0xFF
@@ -341,7 +341,7 @@ async function runTests() {
 
   // Test 10: Real-world patterns
   await test('10.1 PE file signature check (MZ + PE)', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule IsPE {
         condition:
@@ -364,7 +364,7 @@ async function runTests() {
   });
 
   await test('10.2 ELF file signature check', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule IsELF {
         condition:
@@ -378,7 +378,7 @@ async function runTests() {
   });
 
   await test('10.3 ZIP file signature check', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule IsZIP {
         condition: uint32(0) == 0x04034b50

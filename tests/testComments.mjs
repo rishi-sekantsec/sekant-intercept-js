@@ -1,4 +1,4 @@
-import { parseYaraRule, compileYaraRule } from '../yaraRuleCompiler.mjs';
+import { parseYaraRule, compileYaraRule } from '../src/yaraRuleCompiler.mjs';
 
 // Test YARA rule with various comment styles
 const testRule = `

@@ -8,7 +8,7 @@
  * - Comparison with known hash values
  */
 
-import { createHashModule, hash } from '../yaraHashModule.mjs';
+import { createHashModule, hash } from '../src/hashModule.mjs';
 import {
   numberedTest as test,
   assertEquals,
@@ -442,8 +442,8 @@ await asyncTest('9.2: Multiple MD5 calls return consistent results', async () =>
 console.log('\n📦 Section 10: Hash Comparisons in Conditions (String Literals)');
 
 await asyncTest('10.1: MD5 comparison with string literal in condition', async () => {
-  const { YaraScanner } = await import('../yaraScanner.mjs');
-  const scanner = new YaraScanner();
+  const { InterceptScanner } = await import('../src/interceptScanner.mjs');
+  const scanner = new InterceptScanner();
   
   const data = new TextEncoder().encode('test data');
   const hashMod = createHashModule(data);
@@ -464,8 +464,8 @@ await asyncTest('10.1: MD5 comparison with string literal in condition', async (
 });
 
 await asyncTest('10.2: SHA256 comparison with string literal', async () => {
-  const { YaraScanner } = await import('../yaraScanner.mjs');
-  const scanner = new YaraScanner();
+  const { InterceptScanner } = await import('../src/interceptScanner.mjs');
+  const scanner = new InterceptScanner();
   
   const data = new TextEncoder().encode('hello');
   const hashMod = createHashModule(data);
@@ -483,8 +483,8 @@ await asyncTest('10.2: SHA256 comparison with string literal', async () => {
 });
 
 await asyncTest('10.3: Hash comparison not equal', async () => {
-  const { YaraScanner } = await import('../yaraScanner.mjs');
-  const scanner = new YaraScanner();
+  const { InterceptScanner } = await import('../src/interceptScanner.mjs');
+  const scanner = new InterceptScanner();
   
   const data = new TextEncoder().encode('test data');
   const hashMod = createHashModule(data);
@@ -502,8 +502,8 @@ await asyncTest('10.3: Hash comparison not equal', async () => {
 });
 
 await asyncTest('10.4: Multiple hash comparisons combined', async () => {
-  const { YaraScanner } = await import('../yaraScanner.mjs');
-  const scanner = new YaraScanner();
+  const { InterceptScanner } = await import('../src/interceptScanner.mjs');
+  const scanner = new InterceptScanner();
   
   const data = new TextEncoder().encode('test data');
   const hashMod = createHashModule(data);

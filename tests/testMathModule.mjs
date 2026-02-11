@@ -10,7 +10,7 @@
  * - Utility functions (abs, to_number, in_range)
  */
 
-import { createMathModule, math } from '../yaraMathModule.mjs';
+import { createMathModule, math } from '../src/mathModule.mjs';
 import { test, assertEquals, assertInRange, printSummary, printSection } from './testingFramework.mjs';
 
 function assertThrows(fn, message = '') {

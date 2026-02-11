@@ -6,7 +6,7 @@
  * string offsets, and other potentially undefined values.
  */
 
-import { YaraScanner } from '../yaraScanner.mjs';
+import { InterceptScanner } from '../src/interceptScanner.mjs';
 import { test, assertEquals, assertTrue, assertFalse, printSummary, printSection } from './testingFramework.mjs';
 
 printSection('Defined Keyword Tests');
@@ -16,7 +16,7 @@ printSection('Defined Keyword Tests');
 // ======================================================================
 
 await test('1.1 defined with existing identifier', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     rule TestDefined {
       condition:
@@ -32,8 +32,8 @@ await test('1.1 defined with existing identifier', async () => {
 });
 
 await test('1.2 defined with PE module property when PE exists', async () => {
-  const scanner = new YaraScanner();
-  const { parsePEYara, createPEModule } = await import('../yaraPEModule.mjs');
+  const scanner = new InterceptScanner();
+  const { parsePEYara, createPEModule } = await import('../src/peModule.mjs');
   
   // Create minimal PE data (MZ header)
   const peData = new Uint8Array(512);
@@ -62,7 +62,7 @@ await test('1.2 defined with PE module property when PE exists', async () => {
 });
 
 await test('1.3 defined returns false for non-existent property', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     rule TestNotDefined {
       condition:
@@ -82,7 +82,7 @@ await test('1.3 defined returns false for non-existent property', async () => {
 // ======================================================================
 
 await test('2.1 defined with string offset that exists', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     rule TestDefinedOffset {
       strings:
@@ -100,7 +100,7 @@ await test('2.1 defined with string offset that exists', async () => {
 });
 
 await test('2.2 defined with string offset that does not exist', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     rule TestUndefinedOffset {
       strings:
@@ -118,7 +118,7 @@ await test('2.2 defined with string offset that does not exist', async () => {
 });
 
 await test('2.3 defined with string that did not match', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     rule TestUndefinedString {
       strings:
@@ -140,8 +140,8 @@ await test('2.3 defined with string that did not match', async () => {
 // ======================================================================
 
 await test('3.1 defined with ELF module when ELF exists', async () => {
-  const scanner = new YaraScanner();
-  const { parseELFYaraFull, createELFModule } = await import('../yaraELFModule.mjs');
+  const scanner = new InterceptScanner();
+  const { parseELFYaraFull, createELFModule } = await import('../src/elfModule.mjs');
   
   // Create minimal ELF data
   const elfData = new Uint8Array(512);
@@ -171,8 +171,8 @@ await test('3.1 defined with ELF module when ELF exists', async () => {
 });
 
 await test('3.2 defined with hash module', async () => {
-  const scanner = new YaraScanner();
-  const { createHashModule } = await import('../yaraHashModule.mjs');
+  const scanner = new InterceptScanner();
+  const { createHashModule } = await import('../src/hashModule.mjs');
   
   const data = new TextEncoder().encode('test data');
   const hashModule = createHashModule(data);
@@ -193,8 +193,8 @@ await test('3.2 defined with hash module', async () => {
 });
 
 await test('3.3 defined with math module', async () => {
-  const scanner = new YaraScanner();
-  const { createMathModule } = await import('../yaraMathModule.mjs');
+  const scanner = new InterceptScanner();
+  const { createMathModule } = await import('../src/mathModule.mjs');
   
   const data = new TextEncoder().encode('test data');
   const mathModule = createMathModule(data);
@@ -219,7 +219,7 @@ await test('3.3 defined with math module', async () => {
 // ======================================================================
 
 await test('4.1 defined combined with AND', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     rule TestDefinedAnd {
       strings:
@@ -237,7 +237,7 @@ await test('4.1 defined combined with AND', async () => {
 });
 
 await test('4.2 defined combined with OR', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     rule TestDefinedOr {
       condition:
@@ -253,7 +253,7 @@ await test('4.2 defined combined with OR', async () => {
 });
 
 await test('4.3 defined with NOT', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     rule TestNotDefined {
       condition:
@@ -269,7 +269,7 @@ await test('4.3 defined with NOT', async () => {
 });
 
 await test('4.4 multiple defined checks', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     rule TestMultipleDefined {
       condition:
@@ -289,7 +289,7 @@ await test('4.4 multiple defined checks', async () => {
 // ======================================================================
 
 await test('5.1 defined with valid data access', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     rule TestDefinedDataAccess {
       condition:
@@ -305,7 +305,7 @@ await test('5.1 defined with valid data access', async () => {
 });
 
 await test('5.2 defined with out-of-bounds data access', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     rule TestUndefinedDataAccess {
       condition:
@@ -321,7 +321,7 @@ await test('5.2 defined with out-of-bounds data access', async () => {
 });
 
 await test('5.3 defined with uint32 at valid position', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     rule TestDefinedUint32 {
       condition:
@@ -341,7 +341,7 @@ await test('5.3 defined with uint32 at valid position', async () => {
 // ======================================================================
 
 await test('6.1 Graceful PE check with defined', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     rule MaybePE {
       strings:
@@ -362,8 +362,8 @@ await test('6.1 Graceful PE check with defined', async () => {
 // Skipping until scanner module initialization is fixed
 /*
 await test('6.2 Optional module feature check', async () => {
-  const scanner = new YaraScanner();
-  const { createHashModule } = await import('../yaraHashModule.mjs');
+  const scanner = new InterceptScanner();
+  const { createHashModule } = await import('../src/hashModule.mjs');
   
   const data = new TextEncoder().encode('test data');
   const hashModule = createHashModule(data);
@@ -388,7 +388,7 @@ await test('6.2 Optional module feature check', async () => {
 
 // Replacement test - simpler defined check
 await test('6.2 defined with filesize', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     rule TestDefinedFilesize {
       condition:
@@ -404,7 +404,7 @@ await test('6.2 defined with filesize', async () => {
 });
 
 await test('6.3 Conditional string offset check', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     rule ConditionalOffset {
       strings:
@@ -427,7 +427,7 @@ await test('6.3 Conditional string offset check', async () => {
 // ======================================================================
 
 await test('7.1 defined with entrypoint', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     rule TestDefinedEntrypoint {
       condition:
@@ -444,7 +444,7 @@ await test('7.1 defined with entrypoint', async () => {
 });
 
 await test('7.2 nested defined (defined of defined)', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     rule TestNestedDefined {
       condition:
@@ -461,7 +461,7 @@ await test('7.2 nested defined (defined of defined)', async () => {
 });
 
 await test('7.3 defined in parentheses', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     rule TestDefinedParens {
       condition:

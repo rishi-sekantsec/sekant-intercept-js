@@ -8,7 +8,7 @@
  * Global rules act as a "gate" - they must pass for any scanning to succeed.
  */
 
-import { YaraScanner } from '../yaraScanner.mjs';
+import { InterceptScanner } from '../src/interceptScanner.mjs';
 import { test, printSummary, printSection } from './testingFramework.mjs';
 
 printSection('Global Rules Tests');
@@ -18,7 +18,7 @@ printSection('Global Rules Tests');
 // ======================================================================
 
 await test('1.1 Global rule matches - other rules can match', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     global rule GlobalCheck {
       condition:
@@ -47,7 +47,7 @@ await test('1.1 Global rule matches - other rules can match', async () => {
 });
 
 await test('1.2 Global rule fails - other rules cannot match', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     global rule GlobalCheck {
       condition:
@@ -71,7 +71,7 @@ await test('1.2 Global rule fails - other rules cannot match', async () => {
 });
 
 await test('1.3 Global private rule matches - other rules can match', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     global private rule GlobalCheck {
       condition:
@@ -98,7 +98,7 @@ await test('1.3 Global private rule matches - other rules can match', async () =
 });
 
 await test('1.4 Global private rule fails - other rules cannot match', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     global private rule GlobalCheck {
       condition:
@@ -126,7 +126,7 @@ await test('1.4 Global private rule fails - other rules cannot match', async () 
 // ======================================================================
 
 await test('2.1 Global rule with string - matches, other rules can match', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     global private rule GlobalCheck {
       strings:
@@ -155,7 +155,7 @@ await test('2.1 Global rule with string - matches, other rules can match', async
 });
 
 await test('2.2 Global rule with string - fails, other rules cannot match', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     global private rule GlobalCheck {
       strings:
@@ -185,7 +185,7 @@ await test('2.2 Global rule with string - fails, other rules cannot match', asyn
 // ======================================================================
 
 await test('3.1 Multiple global rules - all match, other rules can match', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     global private rule GlobalCheck1 {
       condition:
@@ -219,7 +219,7 @@ await test('3.1 Multiple global rules - all match, other rules can match', async
 });
 
 await test('3.2 Multiple global rules - one fails, other rules cannot match', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     global private rule GlobalCheck1 {
       condition:
@@ -254,7 +254,7 @@ await test('3.2 Multiple global rules - one fails, other rules cannot match', as
 // ======================================================================
 
 await test('4.1 Global passes - multiple rules can all match', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     global private rule GlobalCheck {
       condition:
@@ -290,7 +290,7 @@ await test('4.1 Global passes - multiple rules can all match', async () => {
 });
 
 await test('4.2 Global fails - no rules match even though conditions would pass', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     global private rule GlobalCheck {
       condition:
@@ -325,7 +325,7 @@ await test('4.2 Global fails - no rules match even though conditions would pass'
 // ======================================================================
 
 await test('5.1 Global rule with tags - matches', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     global rule GlobalCheck : system required {
       condition:
@@ -354,7 +354,7 @@ await test('5.1 Global rule with tags - matches', async () => {
 });
 
 await test('5.2 Global rule with metadata - fails', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     global private rule GlobalCheck {
       meta:
@@ -385,7 +385,7 @@ await test('5.2 Global rule with metadata - fails', async () => {
 // ======================================================================
 
 await test('6.1 Only global rule - appears in results when matches', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     global rule OnlyGlobal {
       strings:
@@ -407,7 +407,7 @@ await test('6.1 Only global rule - appears in results when matches', async () =>
 });
 
 await test('6.2 Only global rule - no results when fails', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     global rule OnlyGlobal {
       condition:
@@ -424,7 +424,7 @@ await test('6.2 Only global rule - no results when fails', async () => {
 });
 
 await test('6.3 Global and private global rules together', async () => {
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(`
     global rule PublicGlobal {
       condition:

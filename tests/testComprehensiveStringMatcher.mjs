@@ -1,5 +1,5 @@
-import { compileYaraLike } from '../yaraStringMatch.mjs';
-import { compileYaraRule } from '../yaraRuleCompiler.mjs';
+import { compileYaraLike } from '../src/yaraStringMatch.mjs';
+import { compileYaraRule } from '../src/yaraRuleCompiler.mjs';
 import {
   test,
   assertMatchCount,

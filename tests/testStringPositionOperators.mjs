@@ -5,7 +5,7 @@
  * These operators are critical for YARA rules - used in 65%+ of real-world rules
  */
 
-import { YaraScanner } from "../yaraScanner.mjs";
+import { InterceptScanner } from "../src/interceptScanner.mjs";
 import { test, printSummary, printSection } from "./testingFramework.mjs";
 
 // Test helper
@@ -34,7 +34,7 @@ await test("1.1 String at beginning (offset 0)", async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -55,7 +55,7 @@ await test("1.2 String at middle offset", async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -76,7 +76,7 @@ await test("1.3 String NOT at specified offset", async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -97,7 +97,7 @@ await test("1.4 String appears multiple times, at checks first", async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -118,7 +118,7 @@ await test("1.5 String at hex offset", async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -146,7 +146,7 @@ await test("2.1 String in range (at start)", async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -167,7 +167,7 @@ await test("2.2 String in range (in middle)", async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -188,7 +188,7 @@ await test("2.3 String NOT in range (before)", async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -209,7 +209,7 @@ await test("2.4 String in range with hex offsets", async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -230,7 +230,7 @@ await test("2.5 Multiple matches, check if any in range", async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -258,7 +258,7 @@ await test("3.1 Get first match offset @a", async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -279,7 +279,7 @@ await test("3.2 Get second match offset @a[2]", async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -301,7 +301,7 @@ await test("3.3 Compare offsets (@a < @b)", async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -323,7 +323,7 @@ await test("3.4 Offset in arithmetic (@a + 5 == @b)", async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -344,7 +344,7 @@ await test("3.5 Offset in range (@a > 10 and @a < 20)", async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -372,7 +372,7 @@ await test("4.1 Get match length !a", async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -393,7 +393,7 @@ await test("4.2 Get second match length !a[2]", async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -415,7 +415,7 @@ await test("4.3 Compare lengths (!a > !b)", async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -437,7 +437,7 @@ await test("4.4 Length in arithmetic (@a + !a == @b)", async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -466,7 +466,7 @@ await test('5.1 Combine "at" with "and"', async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -487,7 +487,7 @@ await test('5.2 Combine @ offset check with "at"', async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -508,7 +508,7 @@ await test('5.3 Combine "in" range with offset arithmetic', async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -530,7 +530,7 @@ await test('5.4 Complex: @, !, and "at" combined', async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -551,7 +551,7 @@ await test("5.5 Multiple occurrences with indexed @, !", async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -579,7 +579,7 @@ await test('6.1 String not found - "at" returns false', async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -600,7 +600,7 @@ await test("6.2 Offset index out of bounds", async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -622,7 +622,7 @@ await test("6.3 Length of non-existent match", async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -644,7 +644,7 @@ await test("6.4 Zero offset handling", async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -666,7 +666,7 @@ await test("6.5 Large offset values", async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -694,7 +694,7 @@ await test("7.1 PE file detection - MZ at 0", async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -716,7 +716,7 @@ await test("7.2 Signature in header range", async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -738,7 +738,7 @@ await test("7.3 Sequential strings - A before B", async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -759,7 +759,7 @@ await test("7.4 Fixed offset and fixed length", async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 
@@ -781,7 +781,7 @@ await test("7.5 String proximity - within 10 bytes", async () => {
     }
   `;
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.addRules(rule);
   const results = await scanner.scan(data);
 

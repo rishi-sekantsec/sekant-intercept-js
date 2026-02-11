@@ -10,7 +10,12 @@
     "test": "tests"
   },
   "scripts": {
-    "test": "node tests/runAllIntegrationTests.mjs",
+    "test": "npm run test:unit && npm run test:matching && npm run test:integration && npm run test:modules && npm run test:loops",
+    "test:unit": "node tests/runAllUnitTests.mjs",
+    "test:matching": "node tests/runAllMatchingTests.mjs",
+    "test:integration": "node tests/runAllIntegrationTests.mjs",
+    "test:modules": "node tests/runAllModuleTests.mjs",
+    "test:loops": "node tests/runAllForLoopTests.mjs",
     "example:scanner": "node examples/exampleYaraScanner.mjs",
     "example:modules": "node examples/exampleMathModule.mjs && node examples/exampleHashModule.mjs && node examples/examplePEScanner.mjs && node examples/exampleELFScanner.mjs",
     "example:advanced": "node examples/exampleBooleanLiterals.mjs && node examples/exampleConditionsMatch.mjs && node examples/exampleDependentRules.mjs && node examples/exampleCompleteIntegration.mjs && node examples/exampleFilesizeOperator.mjs",

@@ -1,4 +1,4 @@
-import { compileYaraRule } from '../yaraRuleCompiler.mjs';
+import { compileYaraRule } from '../src/yaraRuleCompiler.mjs';
 
 // Example: A comprehensive YARA rule with extensive comments
 const comprehensiveRule = `

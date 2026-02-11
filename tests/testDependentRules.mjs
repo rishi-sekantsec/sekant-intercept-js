@@ -2,10 +2,10 @@
  * Test dependent rule support in YARA conditions
  */
 
-import { parseConditionToAST } from '../yaraConditionParser.mjs';
-import { ConditionEvaluator, createScanFacts } from '../yaraConditionsMatch.mjs';
+import { parseConditionToAST } from '../src/yaraConditionParser.mjs';
+import { ConditionEvaluator, createScanFacts } from '../src/yaraConditionsMatch.mjs';
 
-function testDependentRules() {
+async function testDependentRules() {
   console.log('Testing Dependent Rules Support\n');
   console.log('='.repeat(50));
   
@@ -149,7 +149,7 @@ function testDependentRules() {
   let passed = 0;
   let failed = 0;
   
-  tests.forEach((test, index) => {
+  for (const [index, test] of tests.entries()) {
     try {
       const scanFacts = createScanFacts(data, strings, {}, {
         matchedRules: test.matchedRules
@@ -157,7 +157,7 @@ function testDependentRules() {
       const evaluator = new ConditionEvaluator(scanFacts);
       
       const ast = parseConditionToAST(test.condition);
-      const result = evaluator.evaluateNode(ast);
+      const result = await evaluator.evaluateNode(ast);
       
       if (result === test.expected) {
         console.log(`✓ Test ${index + 1}: PASSED`);
@@ -180,7 +180,7 @@ function testDependentRules() {
       console.log(`  Error: ${error.message}\n`);
       failed++;
     }
-  });
+  }
   
   console.log('='.repeat(50));
   console.log(`\nResults: ${passed} passed, ${failed} failed out of ${tests.length} tests`);

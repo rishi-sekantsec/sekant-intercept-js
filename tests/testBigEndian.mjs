@@ -1,4 +1,4 @@
-import { YaraScanner } from '../yaraScanner.mjs';
+import { InterceptScanner } from '../src/interceptScanner.mjs';
 import { test, printSummary, printSection } from './testingFramework.mjs';
 
 printSection('Testing Big-Endian Data Access Functions');
@@ -6,7 +6,7 @@ printSection('Testing Big-Endian Data Access Functions');
 (async () => {
   // Test 1: uint16be() - Big-endian 16-bit unsigned
   await test('1.1 uint16be() reads two bytes (big-endian)', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition: uint16be(0) == 0x1234
@@ -19,7 +19,7 @@ printSection('Testing Big-Endian Data Access Functions');
   });
 
   await test('1.2 uint16be() vs uint16() - endianness difference', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition:
@@ -34,7 +34,7 @@ printSection('Testing Big-Endian Data Access Functions');
   });
 
   await test('1.3 uint16be() network byte order', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition: uint16be(0) == 0x8080
@@ -48,7 +48,7 @@ printSection('Testing Big-Endian Data Access Functions');
 
   // Test 2: uint32be() - Big-endian 32-bit unsigned
   await test('2.1 uint32be() reads four bytes (big-endian)', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition: uint32be(0) == 0x12345678
@@ -61,7 +61,7 @@ printSection('Testing Big-Endian Data Access Functions');
   });
 
   await test('2.2 uint32be() vs uint32() - endianness difference', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition:
@@ -76,7 +76,7 @@ printSection('Testing Big-Endian Data Access Functions');
   });
 
   await test('2.3 uint32be() ELF magic number', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition: uint32be(0) == 0x7F454C46
@@ -90,7 +90,7 @@ printSection('Testing Big-Endian Data Access Functions');
 
   // Test 3: int16be() - Big-endian 16-bit signed
   await test('3.1 int16be() reads signed 16-bit (positive, big-endian)', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition: int16be(0) == 0x1234
@@ -103,7 +103,7 @@ printSection('Testing Big-Endian Data Access Functions');
   });
 
   await test('3.2 int16be() reads signed 16-bit (negative, big-endian)', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition: int16be(0) == -1
@@ -116,7 +116,7 @@ printSection('Testing Big-Endian Data Access Functions');
   });
 
   await test('3.3 int16be() vs int16() - endianness difference', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition:
@@ -132,7 +132,7 @@ printSection('Testing Big-Endian Data Access Functions');
 
   // Test 4: int32be() - Big-endian 32-bit signed
   await test('4.1 int32be() reads signed 32-bit (positive, big-endian)', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition: int32be(0) == 0x12345678
@@ -145,7 +145,7 @@ printSection('Testing Big-Endian Data Access Functions');
   });
 
   await test('4.2 int32be() reads signed 32-bit (negative, big-endian)', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition: int32be(0) == -1
@@ -158,7 +158,7 @@ printSection('Testing Big-Endian Data Access Functions');
   });
 
   await test('4.3 int32be() vs int32() - endianness difference', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition:
@@ -174,7 +174,7 @@ printSection('Testing Big-Endian Data Access Functions');
 
   // Test 5: Mixed endianness
   await test('5.1 Mixed little and big-endian in one rule', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition:
@@ -189,7 +189,7 @@ printSection('Testing Big-Endian Data Access Functions');
   });
 
   await test('5.2 All data types mixed', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition:
@@ -209,7 +209,7 @@ printSection('Testing Big-Endian Data Access Functions');
 
   // Test 6: Real-world scenarios
   await test('6.1 Network protocol detection (big-endian port)', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule HTTPPort {
         condition: uint16be(0) == 80 or uint16be(0) == 443
@@ -222,7 +222,7 @@ printSection('Testing Big-Endian Data Access Functions');
   });
 
   await test('6.2 Java class file magic (big-endian)', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule JavaClass {
         condition: uint32be(0) == 0xCAFEBABE
@@ -235,7 +235,7 @@ printSection('Testing Big-Endian Data Access Functions');
   });
 
   await test('6.3 Nested big-endian access', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     const rule = `
       rule Test {
         condition: uint32be(uint16be(0)) == 0x12345678

@@ -2,9 +2,9 @@
  * Tests for String and Time Module Integration
  */
 
-import { YaraScanner } from '../yaraScanner.mjs';
-import { string } from '../yaraStringModule.mjs';
-import { time } from '../yaraTimeModule.mjs';
+import { InterceptScanner } from '../src/interceptScanner.mjs';
+import { string } from '../src/stringModule.mjs';
+import { time } from '../src/timeModule.mjs';
 import { test, assertEquals, assertTrue, assertArrayLength, printSummary, printSection } from './testingFramework.mjs';
 
 // ============================================================================
@@ -60,7 +60,7 @@ printSection('String Module Tests');
   
   // String Module in YARA Rules Tests
   await test('YARA rule with string.to_int() on hex string', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     scanner.setModules({ string });
     
     scanner.addRules(`
@@ -80,7 +80,7 @@ printSection('String Module Tests');
   });
   
   await test('YARA rule with string.to_int() on decimal string', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     scanner.setModules({ string });
     
     scanner.addRules(`
@@ -99,7 +99,7 @@ printSection('String Module Tests');
   });
   
   await test('YARA rule with string.length() check', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     scanner.setModules({ string });
     
     scanner.addRules(`
@@ -118,7 +118,7 @@ printSection('String Module Tests');
   });
   
   await test('YARA rule with string.length() comparison', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     scanner.setModules({ string });
     
     scanner.addRules(`
@@ -137,7 +137,7 @@ printSection('String Module Tests');
   });
   
   await test('YARA rule with multiple string module functions', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     scanner.setModules({ string });
     
     scanner.addRules(`
@@ -174,7 +174,7 @@ printSection('String Module Tests');
   
   // Time Module in YARA Rules Tests
   await test('YARA rule with time.now() check', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     scanner.setModules({ time });
     
     scanner.addRules(`
@@ -191,7 +191,7 @@ printSection('String Module Tests');
   });
   
   await test('YARA rule with time.now() comparison', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     scanner.setModules({ time });
     
     scanner.addRules(`
@@ -208,7 +208,7 @@ printSection('String Module Tests');
   });
   
   await test('YARA rule combining string match with time check', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     scanner.setModules({ time });
     
     scanner.addRules(`
@@ -230,7 +230,7 @@ printSection('String Module Tests');
   
   // Combined String and Time Module Tests
   await test('YARA rule with both string and time modules', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     scanner.setModules({ string, time });
     
     scanner.addRules(`
@@ -249,7 +249,7 @@ printSection('String Module Tests');
   });
   
   await test('YARA rule with complex condition using both modules', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     scanner.setModules({ string, time });
     
     scanner.addRules(`
@@ -270,7 +270,7 @@ printSection('String Module Tests');
   });
   
   await test('Multi-line condition with string and time modules', async () => {
-    const scanner = new YaraScanner();
+    const scanner = new InterceptScanner();
     scanner.setModules({ string, time });
     
     scanner.addRules(`

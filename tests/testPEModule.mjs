@@ -1,7 +1,7 @@
 // testPEModule.mjs
-// Comprehensive tests for PE module (yaraPEModule.mjs)
+// Comprehensive tests for PE module (peModule.mjs)
 
-import { parsePEYara } from '../yaraPEModule.mjs';
+import { parsePEYara } from '../src/peModule.mjs';
 import {
   numberedTest as test,
   assert,

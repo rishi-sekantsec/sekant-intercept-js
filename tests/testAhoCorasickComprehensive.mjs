@@ -26,8 +26,8 @@
  * See: https://yara.readthedocs.io/en/stable/writingrules.html#text-strings
  */
 
-import { AhoCorasick } from '../ahocorasickEngine.mjs';
-import { parseYaraRuleGroup } from '../yaraRuleCompiler.mjs';
+import { AhoCorasick } from '../src/ahocorasickEngine.mjs';
+import { parseYaraRuleGroup } from '../src/yaraRuleCompiler.mjs';
 import {
   test,
   assertEquals,

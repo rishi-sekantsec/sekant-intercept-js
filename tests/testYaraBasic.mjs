@@ -1,4 +1,4 @@
-import { compileYaraLike } from "../yaraStringMatch.mjs";
+import { compileYaraLike } from "../src/yaraStringMatch.mjs";
 
 const encoder = new TextEncoder();
 
