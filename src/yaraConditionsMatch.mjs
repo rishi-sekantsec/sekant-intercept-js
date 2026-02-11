@@ -331,29 +331,29 @@ export class ConditionEvaluator {
         return left % right;
       }
 
-      // Bitwise operators (convert results to unsigned 32-bit to match YARA behavior)
+      // Bitwise operators (use signed 32-bit integers to match standard YARA behavior)
       case 'bitwiseAnd': {
         const left = await this.evaluateNode(node.left);
         const right = await this.evaluateNode(node.right);
         if (this.isAnyUndefined(left, right)) return undefined;
-        return (left & right) >>> 0;
+        return (left & right);
       }
       case 'bitwiseOr': {
         const left = await this.evaluateNode(node.left);
         const right = await this.evaluateNode(node.right);
         if (this.isAnyUndefined(left, right)) return undefined;
-        return (left | right) >>> 0;
+        return (left | right);
       }
       case 'bitwiseXor': {
         const left = await this.evaluateNode(node.left);
         const right = await this.evaluateNode(node.right);
         if (this.isAnyUndefined(left, right)) return undefined;
-        return (left ^ right) >>> 0;
+        return (left ^ right);
       }
       case 'bitwiseNot': {
         const operand = await this.evaluateNode(node.operand);
         if (this.isAnyUndefined(operand)) return undefined;
-        return (~operand) >>> 0;
+        return (~operand);
       }
       case 'shiftLeft': {
         const left = await this.evaluateNode(node.left);
