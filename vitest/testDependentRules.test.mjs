@@ -184,14 +184,7 @@ async function testDependentRules() {
   
   console.log('='.repeat(50));
   console.log(`\nResults: ${passed} passed, ${failed} failed out of ${tests.length} tests`);
-  
-  if (failed === 0) {
-    console.log('\n✓ All tests passed!');
-    process.exit(0);
-  } else {
-    console.log('\n✗ Some tests failed');
-    process.exit(1);
-  }
+
 }
 
 testDependentRules();

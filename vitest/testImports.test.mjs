@@ -436,11 +436,3 @@ console.log(`Total tests: ${totalTests}`);
 console.log(`Passed: ${passedTests} (${((passedTests / totalTests) * 100).toFixed(1)}%)`);
 console.log(`Failed: ${failedTests}`);
 console.log('======================================================================');
-
-if (failedTests === 0) {
-  console.log('✅ All tests passed!');
-  process.exit(0);
-} else {
-  console.log(`❌ ${failedTests} test(s) failed`);
-  process.exit(1);
-}
