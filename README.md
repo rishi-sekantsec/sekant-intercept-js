@@ -12,10 +12,12 @@ By decoupling YARA from libyara and OS-level hooks, Intercept.js enables **signa
 
 ## 🛡️ Strategic Security Use-Cases (MITRE ATT&CK)
 
-* **Endpoint Protection (T1204.004):** Neutralize Malicious Paste/Clipboard attacks by scanning stagers in real-time within the browser.
-* **Secure Ingress (T1105):** Inspect binary blobs, downloads, and email attachments at the point of origin.
-* **Phishing Mitigation (T1566.001):** Perform client-side attachment scanning for E2EE environments where server-side scanning is blind.
-* **Data Loss Prevention (T1020 / T1115):** Monitor application buffers for PII, secret keys, or exfiltration patterns within the memory space.
+
+* **Neutralize Malicious Paste (T1204.004):** Detect malicious blobs in clipboard buffers before they reach the OS shell.
+* **Secure Ingress (T1105):** Block unsafe binary blobs andd downloads within browsers.
+* **Phishing Mitigation (T1566.001):** Perform EDR-like email attachment scanning with email metadata context.
+* **Data Loss Prevention (T1020 / T1115):** Monitor application buffers for PII, secret keys, or exfiltration patterns.
+
 
 ---
 
@@ -82,6 +84,21 @@ Intercept.js is optimized for modern, "OS-less" deployment.
 
 ---
 
+## 🌍 Real-World Usage
+
+Intercept.js powers one of the core defense capabilities that enables **Sekant Security** to secure browsers:
+
+### 1. Download Protection
+By running directly within the browser extension context, Intercept.js inspects file downloads in-flight. It can identify malicious artifacts (like document exploits) before they are written to disk, providing a critical layer of defense.
+
+[![Watch: Blocking Unsafe Downloads](https://img.youtube.com/vi/YOUR_VIDEO_ID/0.jpg)](https://www.youtube.com/watch?v=YOUR_VIDEO_ID "Watch Intercept.js block malware downloads")
+*(Click to watch demo)*
+
+### 2. Clipboard Sanitization
+Intercept.js scans clipboard content copied within browsers in real-time, detecting obfuscated / malicious payloads and blocking them before execution — closing a major security gap in endpoint protection.
+
+---
+
 ## � Supported Modules & Extensibility
 
 Intercept.js includes native JavaScript implementations of standard YARA modules, ensuring compatibility without external dependencies.
@@ -97,16 +114,6 @@ Intercept.js includes native JavaScript implementations of standard YARA modules
 You can easily extend the engine by injecting custom JS objects as modules. This allows rules to query application-specific context (e.g., `http.url`, `user.role`, `browser.userAgent`) without modifying the core engine.
 
 See [Custom Module Overview](docs/developer/CUSTOM_MODULE_OVERVIEW.md) for implementation details.
-
----
-
-## ⚡ Performance & Limitations
-
-Intercept.js is designed for **safety and portability**, not raw throughput supremacy over C-based YARA.
-
-*   **Execution Speed**: Pure JS execution is typically 2-10x slower than native C code, though V8's JIT compiler optimizes RegEx heavy rules significantly.
-*   **Memory Usage**: Scanning large files (>100MB) in a browser environment may trigger garbage collection pauses. We recommend streaming or chunking for large datasets.
-*   **Engine Differences**: While we support ~95% of standard YARA features, some niche features (like `import "cuckoo"`) are not applicable in a browser/edge context. See [Engine Differences](docs/general/ENGINE_DIFFERENCES.md) for a full audit.
 
 ---
 
@@ -173,6 +180,16 @@ npm run vitest vitest/testComprehensive.test.mjs
 
 ---
 
+## ⚡ Performance & Limitations
+
+Intercept.js is designed for **safety and portability**, not raw throughput supremacy over C-based YARA.
+
+*   **Execution Speed**: Pure JS execution is typically 2-10x slower than native C code, though V8's JIT compiler optimizes RegEx heavy rules significantly.
+*   **Memory Usage**: Scanning large files (>100MB) in a browser environment may trigger garbage collection pauses. We recommend streaming or chunking for large datasets.
+*   **Engine Differences**: While we support ~95% of standard YARA features, some niche features (like `import "cuckoo"`) are not applicable in a browser/edge context. See [Engine Differences](docs/general/ENGINE_DIFFERENCES.md) for a full audit.
+
+---
+
 ## 🤝 Contributing
 
 We welcome contributions! Please see [CONTRIBUTION_GUIDELINES.md](docs/general/CONTRIBUTION_GUIDELINES.md) for details on how to get started.
@@ -185,7 +202,7 @@ We welcome contributions! Please see [CONTRIBUTION_GUIDELINES.md](docs/general/C
 
 ## 🔐 Security Policy
 
-If you discover a security vulnerability within Intercept.js (e.g., a way to bypass detection or cause a Denial of Service via a crafted rule), please report it privately to `security@sekant.io` rather than opening a public issue.
+If you discover a security vulnerability within Intercept.js (e.g., a way to bypass detection or cause a Denial of Service via a crafted rule), please report it privately to `support@sekantsecurity.com` rather than opening a public issue.
 
 ---
 
