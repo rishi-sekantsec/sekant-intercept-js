@@ -2,7 +2,7 @@
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Browser%20%7C%20Node%20%7C%20Edge-green.svg)](https://github.com/sekantsec/sekant-intercept-js)
-[![Modern JS](https://img.shields.io/badge/ECMAScript-2024%2B-yellow.svg)](https://github.com/sekantsec/sekant-intercept-js)
+<!-- [![Modern JS](https://img.shields.io/badge/ECMAScript-2024%2B-yellow.svg)](https://github.com/sekantsec/sekant-intercept-js) -->
 
 **Intercept.js** is a clean-room, zero-dependency YARA engine implemented in native JavaScript. It is designed to disrupt the attacker toolchain at the **application edge**—before malicious payloads ever touch the disk.
 
@@ -38,7 +38,13 @@ Unlike Node wrappers that rely on native C++ bindings, Intercept.js leverages th
 ## ⚡ Quick Start
 
 ### Installation
-`npm install sekant-intercept-js`
+
+```bash
+git clone https://github.com/sekantsec/sekant-intercept-js.git
+cd sekant-intercept-js
+npm install
+npm run build
+```
 
 ### 🏃‍♂️ Run Examples
 
@@ -53,7 +59,7 @@ Quickly verify the engine with built-in examples:
 ### Basic Usage (InterceptScanner)
 
 ```javascript
-import { InterceptScanner } from 'sekant-intercept-js';
+import { InterceptScanner } from './src/interceptScanner.mjs';
 
 const rules = 'rule Suspicious_Stager { strings: $ps = "powershell.exe" nocase condition: $ps }';
 const scanner = new InterceptScanner(rules);
@@ -86,12 +92,13 @@ Intercept.js is optimized for modern, "OS-less" deployment.
 
 ## 🌍 Real-World Usage
 
-Intercept.js powers one of the core defense capabilities that enables **Sekant Security** to secure browsers:
+Intercept.js is a core capability that enables **Sekant Security** to secure browsers:
 
 ### 1. Download Protection
 By running directly within the browser extension context, Intercept.js inspects file downloads in-flight. It can identify malicious artifacts (like document exploits) before they are written to disk, providing a critical layer of defense.
 
-[![Watch: Blocking Unsafe Downloads](https://img.youtube.com/vi/YOUR_VIDEO_ID/0.jpg)](https://www.youtube.com/watch?v=YOUR_VIDEO_ID "Watch Intercept.js block malware downloads")
+[![Watch: Blocking Unsafe Downloads](https://img.youtube.com/vi/92jDpF19Eso/0.jpg)](https://youtu.be/92jDpF19Eso "Watch Intercept.js block malware downloads")
+
 *(Click to watch demo)*
 
 ### 2. Clipboard Sanitization
