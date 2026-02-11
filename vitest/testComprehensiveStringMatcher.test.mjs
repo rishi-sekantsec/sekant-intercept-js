@@ -687,7 +687,7 @@ await test('11.1 Simple rule with one string', () => {
   const compiled = compileYaraRule(rule);
   const data = encoder.encode('This is malware');
   const result = compiled.match(data);
-  assertMatchCount(result.stringMatches.a, 1, 'Should match string');
+  assertMatchCount(result.stringMatches.$a, 1, 'Should match string');
 });
 
 await test('11.2 Rule with multiple strings', () => {
@@ -704,9 +704,9 @@ await test('11.2 Rule with multiple strings', () => {
   const compiled = compileYaraRule(rule);
   const data = encoder.encode('Found virus and trojan');
   const result = compiled.match(data);
-  assertMatchCount(result.stringMatches.s1, 1, 'Should match virus');
-  assertMatchCount(result.stringMatches.s2, 1, 'Should match trojan');
-  assertMatchCount(result.stringMatches.s3, 0, 'Should not match worm');
+  assertMatchCount(result.stringMatches.$s1, 1, 'Should match virus');
+  assertMatchCount(result.stringMatches.$s2, 1, 'Should match trojan');
+  assertMatchCount(result.stringMatches.$s3, 0, 'Should not match worm');
 });
 
 await test('11.3 Rule with hex and text strings', () => {
@@ -722,8 +722,8 @@ await test('11.3 Rule with hex and text strings', () => {
   const compiled = compileYaraRule(rule);
   const data = new Uint8Array([0x4D, 0x5A, ...encoder.encode(' Microsoft')]);
   const result = compiled.match(data);
-  assertMatchCount(result.stringMatches.pe, 1, 'Should match PE header');
-  assertMatchCount(result.stringMatches.str, 1, 'Should match string');
+  assertMatchCount(result.stringMatches.$pe, 1, 'Should match PE header');
+  assertMatchCount(result.stringMatches.$str, 1, 'Should match string');
 });
 
 await test('11.4 Rule with regex', () => {
@@ -739,7 +739,7 @@ await test('11.4 Rule with regex', () => {
   const data = encoder.encode('Contact: admin@evil.com');
   const result = compiled.match(data);
   // YARA-like overlapping: same as test 8.4
-  assertMatchCount(result.stringMatches.email, 5, 'Should match with YARA-like overlapping behavior');
+  assertMatchCount(result.stringMatches.$email, 5, 'Should match with YARA-like overlapping behavior');
 });
 
 await test('11.5 Rule with metadata', () => {
@@ -789,8 +789,8 @@ await test('11.7 Rule with modifiers', () => {
   const compiled = compileYaraRule(rule);
   const data = encoder.encode('TEST contains word');
   const result = compiled.match(data);
-  assertMatchCount(result.stringMatches.a, 1, 'Should match nocase');
-  assertMatchCount(result.stringMatches.d, 1, 'Should match fullword');
+  assertMatchCount(result.stringMatches.$a, 1, 'Should match nocase');
+  assertMatchCount(result.stringMatches.$d, 1, 'Should match fullword');
 });
 
 await test('11.8 Complex real-world rule', () => {
@@ -818,11 +818,11 @@ await test('11.8 Complex real-world rule', () => {
   ]);
   const result = compiled.match(data);
   
-  assertMatchCount(result.stringMatches.pe, 1, 'Should match PE header');
-  assertMatchCount(result.stringMatches.ransom1, 1, 'Should match encrypt');
-  assertMatchCount(result.stringMatches.ransom2, 1, 'Should match ransom');
-  assertMatchCount(result.stringMatches.ransom3, 1, 'Should match bitcoin');
-  assertMatchCount(result.stringMatches.url, 1, 'Should match URL');
+  assertMatchCount(result.stringMatches.$pe, 1, 'Should match PE header');
+  assertMatchCount(result.stringMatches.$ransom1, 1, 'Should match encrypt');
+  assertMatchCount(result.stringMatches.$ransom2, 1, 'Should match ransom');
+  assertMatchCount(result.stringMatches.$ransom3, 1, 'Should match bitcoin');
+  assertMatchCount(result.stringMatches.$url, 1, 'Should match URL');
 });
 
 // ═════════════════════════════════════════════════════════════════════════
@@ -845,8 +845,8 @@ await test('12.1 PE file detection', () => {
     0x4D, 0x5A, ...new Array(58).fill(0), 0x50, 0x45, 0x00, 0x00
   ]);
   const result = compiled.match(data);
-  assertMatchCount(result.stringMatches.mz, 1, 'Should match MZ header');
-  assertMatchCount(result.stringMatches.pe, 1, 'Should match PE signature');
+  assertMatchCount(result.stringMatches.$mz, 1, 'Should match MZ header');
+  assertMatchCount(result.stringMatches.$pe, 1, 'Should match PE signature');
 });
 
 await test('12.2 Suspicious API calls', () => {
@@ -863,9 +863,9 @@ await test('12.2 Suspicious API calls', () => {
   const compiled = compileYaraRule(rule);
   const data = encoder.encode('CreateRemoteThread VirtualAllocEx WriteProcessMemory');
   const result = compiled.match(data);
-  assertMatchCount(result.stringMatches.api1, 1, 'Should match API 1');
-  assertMatchCount(result.stringMatches.api2, 1, 'Should match API 2');
-  assertMatchCount(result.stringMatches.api3, 1, 'Should match API 3');
+  assertMatchCount(result.stringMatches.$api1, 1, 'Should match API 1');
+  assertMatchCount(result.stringMatches.$api2, 1, 'Should match API 2');
+  assertMatchCount(result.stringMatches.$api3, 1, 'Should match API 3');
 });
 
 await test('12.3 Cryptocurrency wallet detection', () => {
@@ -882,7 +882,7 @@ await test('12.3 Cryptocurrency wallet detection', () => {
   const data = encoder.encode('Send to 1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa wallet');
   const result = compiled.match(data);
   // YARA-like overlapping: finds multiple starting positions matching the pattern
-  assertMatchCount(result.stringMatches.btc, 3, 'Should match with YARA-like overlapping behavior');
+  assertMatchCount(result.stringMatches.$btc, 3, 'Should match with YARA-like overlapping behavior');
 });
 
 await test('12.4 Obfuscated JavaScript', () => {
@@ -900,8 +900,8 @@ await test('12.4 Obfuscated JavaScript', () => {
   const compiled = compileYaraRule(rule);
   const data = encoder.encode('eval(unescape("\\x61\\x6c\\x65\\x72\\x74"))');
   const result = compiled.match(data);
-  assertMatchCount(result.stringMatches.eval, 1, 'Should match eval');
-  assertMatchCount(result.stringMatches.unescape, 1, 'Should match unescape');
+  assertMatchCount(result.stringMatches.$eval, 1, 'Should match eval');
+  assertMatchCount(result.stringMatches.$unescape, 1, 'Should match unescape');
 });
 
 await test('12.5 Shellcode detection', () => {
@@ -918,9 +918,9 @@ await test('12.5 Shellcode detection', () => {
   const compiled = compileYaraRule(rule);
   const data = new Uint8Array([0x90, 0x90, 0x90, 0x90, 0x90, 0xCC, 0xE8, 0x00, 0x00, 0x00, 0x00]);
   const result = compiled.match(data);
-  assertMatchCount(result.stringMatches.nop_sled, 1, 'Should match NOP sled');
-  assertMatchCount(result.stringMatches.int3, 1, 'Should match INT3');
-  assertMatchCount(result.stringMatches.call, 1, 'Should match CALL');
+  assertMatchCount(result.stringMatches.$nop_sled, 1, 'Should match NOP sled');
+  assertMatchCount(result.stringMatches.$int3, 1, 'Should match INT3');
+  assertMatchCount(result.stringMatches.$call, 1, 'Should match CALL');
 });
 
 // ═════════════════════════════════════════════════════════════════════════
