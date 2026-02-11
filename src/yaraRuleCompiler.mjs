@@ -347,6 +347,11 @@ function parseStrings(ruleBody) {
       // Handle anonymous strings ($ = "pattern")
       if (!varName || varName === '') {
         varName = `.anon_${anonCounter++}`;
+      } else {
+        // Add proper $ prefix to string identifier if not present -- NEED TO VERIFY THIS LOGIC
+        if (!varName.startsWith('$')) {
+          varName = '$' + varName;
+        }
       }
       
       try {

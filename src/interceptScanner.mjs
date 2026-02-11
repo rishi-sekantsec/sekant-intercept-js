@@ -240,8 +240,16 @@ export class InterceptScanner {
     for (const rule of rules) {
       ruleMatches[rule.id] = {};
       for (const varName of Object.keys(rule.strings)) {
-        ruleMatches[rule.id][`$${varName}`] = {
-          identifier: `$${varName}`,
+        // Use variable name as-is since compiler now ensures proper prefixes ($ or .anon)
+        // If coming from old compiler without $, add it for named strings
+        const matchKey = varName.startsWith('$') || varName.startsWith('.') ? varName : `$${varName}`;
+        const anonymousKey = matchKey.startsWith('.') ? `\$${matchKey}` : matchKey;
+        
+        // For compatibility with rest of system that expects $.anon for anonymous
+        const finalKey = varName.startsWith('.') ? `\$${varName}` : matchKey;
+
+        ruleMatches[rule.id][finalKey] = {
+          identifier: finalKey,
           matched: false,
           count: 0,
           matches: [],
@@ -254,7 +262,12 @@ export class InterceptScanner {
 
     // Populate with verified matches
     for (const candidate of verifiedCandidates) {
-      const matchInfo = ruleMatches[candidate.id][`$${candidate.varName}`];
+       // Handle key lookup (handle $.anon for anonymous)
+       const finalKey = candidate.varName.startsWith('.') ? `\$${candidate.varName}` : candidate.varName;
+       // Fallback for strict $ requirement
+       const lookupKey = ruleMatches[candidate.id][finalKey] ? finalKey : (finalKey.startsWith('$') ? finalKey : `\$${finalKey}`);
+       
+      const matchInfo = ruleMatches[candidate.id][lookupKey];
 
       if (candidate.matches && candidate.matches.length > 0) {
         // Has detailed match information
@@ -287,7 +300,11 @@ export class InterceptScanner {
       for (const [varName, strDef] of Object.entries(rule.strings)) {
         if (strDef.type === "text" || (strDef.type === "regex" && strDef.literalPrefix?.length > 0)) continue; // Should be part of AC verified candidates
 
-        const matchInfo = ruleMatches[rule.id][`$${varName}`];
+        // Handle key lookup (handle $.anon for anonymous)
+        const finalKey = varName.startsWith('.') ? `\$${varName}` : varName;
+        const lookupKey = ruleMatches[rule.id][finalKey] ? finalKey : (finalKey.startsWith('$') ? finalKey : `\$${finalKey}`);
+        
+        const matchInfo = ruleMatches[rule.id][lookupKey];
 
         // Build cache hex string if needed
         if (strDef.type === "hex" && dataAsHexString === null) {
