@@ -14,7 +14,7 @@
     "example:scanner": "node examples/exampleYaraScanner.mjs",
     "example:modules": "node examples/exampleMathModule.mjs && node examples/exampleHashModule.mjs && node examples/examplePEScanner.mjs && node examples/exampleELFScanner.mjs",
     "example:advanced": "node examples/exampleBooleanLiterals.mjs && node examples/exampleConditionsMatch.mjs && node examples/exampleDependentRules.mjs && node examples/exampleCompleteIntegration.mjs && node examples/exampleFilesizeOperator.mjs",
-    "build": "esbuild src/index.js --bundle --platform=node --format=esm --outfile=dist/sekant-intercept.mjs"
+    "build": "node build.mjs"
   },
   "repository": {
     "type": "git",
