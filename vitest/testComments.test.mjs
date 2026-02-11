@@ -1,7 +1,12 @@
+
+/*
+ * Test YARA rule with various comment styles
+ */
+import { describe, test, expect } from 'vitest';
 import { parseYaraRule, compileYaraRule } from '../src/yaraRuleCompiler.mjs';
 
-// Test YARA rule with various comment styles
-const testRule = `
+describe('YARA Comments Parsing', () => {
+  const testRule = `
 /* 
  * Multi-line comment at the start
  * This should be ignored
@@ -29,29 +34,24 @@ rule TestRule : malware trojan { // inline comment after rule declaration
 }
 `;
 
-console.log('Testing YARA rule parser with comments...\n');
+  test('should parse rule with extensive comments', () => {
+    const parsed = parseYaraRule(testRule);
+    
+    expect(parsed.name).toBe('TestRule');
+    expect(parsed.tags).toEqual(['malware', 'trojan']);
+    expect(parsed.metadata).toHaveProperty('author', 'Test Author');
+    expect(parsed.metadata).toHaveProperty('description', 'A test rule with comments');
+    expect(parsed.metadata).toHaveProperty('version', 1);
+    
+    expect(Object.keys(parsed.strings)).toContain('$text1');
+    expect(Object.keys(parsed.strings)).toContain('$text2');
+    expect(Object.keys(parsed.strings)).toContain('$hex1');
+    expect(Object.keys(parsed.strings)).toContain('$regex1');
+  });
 
-try {
-  const parsed = parseYaraRule(testRule);
-  console.log('✓ Successfully parsed rule with comments\n');
-  
-  console.log('Rule name:', parsed.name);
-  console.log('Tags:', parsed.tags);
-  console.log('Metadata:', parsed.metadata);
-  console.log('Strings:', Object.keys(parsed.strings));
-  console.log('Condition:', parsed.condition);
-  
-  console.log('\n--- Compiled Rule Test ---\n');
-  const compiled = compileYaraRule(testRule);
-  console.log('Compiled rule name:', compiled.name);
-  console.log('Number of string matchers:', Object.keys(compiled.strings).length);
-  
-  // Test matching
-  const testData = new TextEncoder().encode('This contains malware and other stuff');
-  const result = compiled.match(testData);
-  console.log('\nMatch result for test data:');
-  console.log('String matches:', Object.entries(result.stringMatches).map(([k, v]) => `${k}: ${v.length} matches`));
-  
-} catch (error) {
-  console.error('✗ Error:', error.message);
-}
+  test('should compile rule with comments', () => {
+    const compiled = compileYaraRule(testRule);
+    expect(compiled.name).toBe('TestRule');
+    expect(Object.keys(compiled.strings)).toHaveLength(4);
+  });
+});

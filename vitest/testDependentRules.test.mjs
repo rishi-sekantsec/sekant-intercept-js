@@ -2,13 +2,11 @@
  * Test dependent rule support in YARA conditions
  */
 
+import { describe, test, expect } from 'vitest';
 import { parseConditionToAST } from '../src/yaraConditionParser.mjs';
 import { ConditionEvaluator, createScanFacts } from '../src/yaraConditionsMatch.mjs';
 
-async function testDependentRules() {
-  console.log('Testing Dependent Rules Support\n');
-  console.log('='.repeat(50));
-  
+describe('Dependent Rules Support', () => {
   // Test data
   const data = new Uint8Array([0x4D, 0x5A, 0x48, 0x65, 0x6c, 0x6c, 0x6f]); // "MZHello"
   
@@ -146,45 +144,17 @@ async function testDependentRules() {
     },
   ];
   
-  let passed = 0;
-  let failed = 0;
-  
-  for (const [index, test] of tests.entries()) {
-    try {
+  tests.forEach((t) => {
+    test(t.name, async () => {
       const scanFacts = createScanFacts(data, strings, {}, {
-        matchedRules: test.matchedRules
+        matchedRules: t.matchedRules
       });
       const evaluator = new ConditionEvaluator(scanFacts);
       
-      const ast = parseConditionToAST(test.condition);
+      const ast = parseConditionToAST(t.condition);
       const result = await evaluator.evaluateNode(ast);
       
-      if (result === test.expected) {
-        console.log(`✓ Test ${index + 1}: PASSED`);
-        console.log(`  ${test.name}`);
-        console.log(`  Condition: ${test.condition}`);
-        console.log(`  Result: ${result}\n`);
-        passed++;
-      } else {
-        console.log(`✗ Test ${index + 1}: FAILED`);
-        console.log(`  ${test.name}`);
-        console.log(`  Condition: ${test.condition}`);
-        console.log(`  Expected: ${test.expected}`);
-        console.log(`  Got: ${result}\n`);
-        failed++;
-      }
-    } catch (error) {
-      console.log(`✗ Test ${index + 1}: ERROR`);
-      console.log(`  ${test.name}`);
-      console.log(`  Condition: ${test.condition}`);
-      console.log(`  Error: ${error.message}\n`);
-      failed++;
-    }
-  }
-  
-  console.log('='.repeat(50));
-  console.log(`\nResults: ${passed} passed, ${failed} failed out of ${tests.length} tests`);
-
-}
-
-testDependentRules();
+      expect(result).toBe(t.expected);
+    });
+  });
+});

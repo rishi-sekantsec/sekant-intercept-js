@@ -4,10 +4,14 @@
 
 import { parseConditionToAST } from '../src/yaraConditionParser.mjs';
 import { ConditionEvaluator, createScanFacts } from '../src/yaraConditionsMatch.mjs';
-import { describe, test, expect } from 'vitest';
 
-describe('Boolean Literals Support', () => {
-  // Common setup for all tests
+import { describe, it, expect } from 'vitest';
+
+async function testBooleanLiterals() {
+  console.log('Testing Boolean Literals Support\n');
+  console.log('='.repeat(50));
+  
+  // Test data
   const data = new Uint8Array([0x48, 0x65, 0x6c, 0x6c, 0x6f]); // "Hello"
   const strings = {
     '$a': {
@@ -23,7 +27,7 @@ describe('Boolean Literals Support', () => {
   const scanFacts = createScanFacts(data, strings, {}, {});
   const evaluator = new ConditionEvaluator(scanFacts);
   
-  const testCases = [
+  const tests = [
     // Simple boolean literals
     { condition: 'true', expected: true },
     { condition: 'false', expected: false },
@@ -60,10 +64,27 @@ describe('Boolean Literals Support', () => {
     { condition: 'false or (filesize > 0)', expected: true },
     { condition: 'true and (filesize == 0)', expected: false },
   ];
+  
+  let passed = 0;
+  let failed = 0;
+  
+  for (const [index, test] of tests.entries()) {
+    try {
+      const ast = parseConditionToAST(test.condition);
+      const result = await evaluator.evaluateNode(ast);
 
-  test.each(testCases)('Condition "$condition" should evaluate to $expected', async ({ condition, expected }) => {
-    const ast = parseConditionToAST(condition);
-    const result = await evaluator.evaluateNode(ast);
-    expect(result).toBe(expected);
-  });
-});
+      expect(result, test.condition).toBe(test.expected)
+      
+    } catch (error) {
+      console.log(`✗ Test ${index + 1}: ERROR`);
+      console.log(`  Condition: ${test.condition}`);
+      console.log(`  Error: ${error.message}\n`);
+      failed++;
+    }
+  }
+  
+  console.log('='.repeat(50));
+  console.log(`\nResults: ${passed} passed, ${failed} failed out of ${tests.length} tests`);
+}
+
+testBooleanLiterals();
