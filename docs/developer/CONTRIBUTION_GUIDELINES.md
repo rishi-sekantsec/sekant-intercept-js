@@ -29,15 +29,15 @@
 ## Release Checklist
 
 -   [ ] Run `benchmark.mjs` to verify performance.
--   [ ] Verify `new_docs/` are up to date with code changes.
+-   [ ] Verify `docs/` are up to date with code changes.
 -   [ ] Check `TODO.md` for blocking issues.
 -   [ ] Update version strings (if applicable).
 
 ## Roadmap & Priorities
 
-See `new_docs/TODO.md` for the current backlog. Key areas of interest:
+See `TODO.md` for the current backlog. Key areas of interest:
 1.  **Streaming Support**: Enabling scanning of files larger than 2GB (requires architectural changes to AC engine).
-2.  **Bitwise Precedence Fix**: Aligning operator precedence with standard YARA (see `YARA_SUPPORT.md`).
+2.  **Bitwise Precedence Fix**: Aligning operator precedence with standard YARA (see `../general/YARA_GRAMMAR_SUPPORT.md`).
 
 ---
-**Last Updated:** 2026-02-11
+**Last Updated:** 2026-02-12

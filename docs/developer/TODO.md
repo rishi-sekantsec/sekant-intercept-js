@@ -1,6 +1,6 @@
 # Improvement TODO List
 
-This document tracks planned improvements and feature gaps to address in the YARA engine.
+This document tracks planned improvements and feature gaps to address in the Intercept.js engine.
 
 ## PE Module Enhancements (pe-library integration)
 
@@ -28,6 +28,9 @@ The underlying `pe-library` supports these features, but they need to be mapped 
     - Implement support for streaming input (e.g., node streams or web streams) to scan very large files without loading the entire file into memory.
     - Requires logic to maintain sliding windows or buffers for cross-chunk pattern matching.
     - **Goal:** Enable scanning of multi-gigabyte files within a fixed memory footprint while building the full `ScanFacts` object.
+- [ ] **Bitwise Precedence Fix** (Added: 2026-02-12)
+    - Align operator precedence with standard YARA (comparison looser than bitwise).
+    - Current workaround is requiring parentheses.
 
 ## Documentation
 
@@ -35,4 +38,4 @@ The underlying `pe-library` supports these features, but they need to be mapped 
     - Create documentation for contributors on how to add new modules or update existing ones.
 
 ---
-**Last Updated:** 2026-02-11
+**Last Updated:** 2026-02-12

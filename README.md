@@ -199,7 +199,7 @@ Intercept.js is designed for **safety and portability**, not raw throughput supr
 
 ## 🤝 Contributing
 
-We welcome contributions! Please see [CONTRIBUTION_GUIDELINES.md](docs/general/CONTRIBUTION_GUIDELINES.md) for details on how to get started.
+We welcome contributions! Please see [CONTRIBUTION_GUIDELINES.md](docs/developer/CONTRIBUTION_GUIDELINES.md) for details on how to get started.
 
 1.  Fork the repository.
 2.  Create your feature branch (`git checkout -b feature/amazing-feature`).
