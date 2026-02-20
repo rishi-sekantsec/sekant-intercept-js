@@ -1,12 +1,17 @@
-# Sekant Intercept.js: An Embeddable YARA-Compatible Content Inspection Engine for Edge Deployments
+# Sekant Intercept.js: An Embeddable & Extensible Content Inspection Engine for Edge Deployments
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-Browser%20%7C%20Node%20%7C%20Edge-green.svg)](https://github.com/sekantsec/sekant-intercept-js)
 <!-- [![Modern JS](https://img.shields.io/badge/ECMAScript-2024%2B-yellow.svg)](https://github.com/sekantsec/sekant-intercept-js) -->
 
-**Intercept.js** is a clean-room, zero-dependency YARA engine implemented in native JavaScript. It is designed to disrupt the attacker toolchain at the **application edge**—before malicious payloads ever touch the disk.
+**Sekant Intercept.js** is an open-source, high-performance, byte-level pattern-matching engine written in vanilla Javascript for native JavaScript environments, including sandboxed environments like browsers and email applications. The engine is built for security teams who want to "Shift Left" their defenses to disrupt the attacker toolchain before a payload ever touches the disk. While traditional security tools rely on OS-level hooks or heavy binaries, Intercept.js allows defenders to **embed deep content inspection within “edge” applications** – *Chrome Extensions, Microsoft Office Add-ins, Email Clients, Electron Apps, and Serverless Workers*. 
 
-By decoupling YARA from libyara and OS-level hooks, Intercept.js enables **signature-based defense** in sandboxed environments where native binaries cannot run, such as Chrome Extensions, Microsoft Office Add-ins, Email Clients, Electron Apps, and Serverless Workers.
+It is **compatible with standard YARA rule syntax and modules**, which makes it a drop-in solution for SOC analysts looking to port existing threat intelligence to edge-apps where libyara cannot be practically deployed. It comes with support for PE, ELF, Math, Hash, String and Time modules.
+
+A key technical innovation is the **extensibility via support for custom, JS-native modules** that also accept context-specific metadata. This allows **rules to utilize context + content during evaluation**, enabling a richer set of rules like:
+- Content does not match expressed MIME type
+- Executable downloaded from newly observed domain
+- Document with macro received from unknown email sender
 
 ---
 
