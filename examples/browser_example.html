@@ -198,7 +198,8 @@ rule ELF_Header_Check {
                      const peSig = "50 45 00 00"; // PE\0\0
                      
                      // 3. File Header (20 bytes)
-                     const fileHeader = "4C 01 01 00 00 00 00 00 00 00 00 00 E0 00 02 01"; 
+                     // Machine(2), Sections(2), Time(4), SymPtr(4), SymNum(4), OptSize(2), Char(2)
+                     const fileHeader = "4C 01 01 00 00 00 00 00 00 00 00 00 00 00 00 00 E0 00 02 01"; 
 
                      // 4. Optional Header (224 bytes for PE32)
                      const optMagic = "0B 01";
