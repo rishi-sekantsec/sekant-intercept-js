@@ -89,7 +89,15 @@
         const SAMPLE_RULES = [
             {
                 id: 'btnRuleEx1',
-                code: `rule RegexMatch {
+                code: `rule Base64AndNocase {
+    strings:
+        $b64 = "secret_command" base64
+        $nc  = "SuspiciousPattern" nocase
+    condition:
+        $b64 or $nc
+}
+
+rule RegexMatch {
     strings:
         // Matches "detect_me" or "detect_it" case-insensitive
         $re1 = /detect_(me|it)/i
@@ -175,13 +183,13 @@ rule ELF_Header_Check {
                 id: 'btnTextEx1',
                 label: "Ex 1: Text",
                 encoding: 'ascii',
-                generate: () => "This text contains detect_me and malicious content."
+                generate: () => "This text contains detect_me and malicious content. Detects c2VjcmV0X2NvbW1hbmQ= and suspiciouspattern."
             },
             {
                 id: 'btnTextEx2',
                 label: "Ex 2: Data",
                 encoding: 'ascii',
-                generate: () => "This important data contains a huge leak."
+                generate: () => "This important data in safe_mode contains a huge leak."
             },
             {
                 id: 'btnTextEx3',
