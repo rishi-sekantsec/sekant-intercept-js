@@ -7,7 +7,7 @@
   "directories": {
     "doc": "docs",
     "example": "examples",
-    "test": "tests"
+    "test": "vitest"
   },
   "scripts": {
     "vitest": "vitest",
@@ -32,6 +32,8 @@
     "javascript",
     "library",
     "yara",
+    "intercept",
+    "sekant",
     "embeddable",
     "content-inspection"
   ],
