@@ -6,6 +6,11 @@
 
 import { spawn } from "child_process";
 import { argv, exit } from "process";
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 function parseArgs() {
   if (argv.length < 4) {
@@ -44,12 +49,14 @@ function runCommand(command, args) {
 }
 
 async function runNodeImplementation(rulefile, testfile) {
-  const output = await runCommand("node", ["tests/direct_compare/node_yara_runner.js", "--rulefile", rulefile, "--file", testfile, "--json"]);
+  const runnerPath = join(__dirname, 'node_yara_runner.js');
+  const output = await runCommand("node", [runnerPath, "--rulefile", rulefile, "--file", testfile, "--json"]);
   return JSON.parse(output);
 }
 
 async function runPythonImplementation(rulefile, testfile) {
-  const output = await runCommand("python3", ["tests/direct_compare/py_yara_runner.py", "--rulefile", rulefile, "--file", testfile, "--json"]);
+  const runnerPath = join(__dirname, 'py_yara_runner.py');
+  const output = await runCommand("python3", [runnerPath, "--rulefile", rulefile, "--file", testfile, "--json"]);
   return JSON.parse(output);
 }
 

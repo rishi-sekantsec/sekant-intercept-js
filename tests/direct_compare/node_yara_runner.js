@@ -3,7 +3,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { argv, exit } from "process";
-import { YaraScanner } from "../../yaraScanner.mjs";
+import { InterceptScanner } from "../../src/interceptScanner.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -36,7 +36,7 @@ async function main() {
 
   // console.log(data.slice(6067, 6074).toString('utf8'));
 
-  const scanner = new YaraScanner();
+  const scanner = new InterceptScanner();
   scanner.compile(ruleText);
 
   try {
