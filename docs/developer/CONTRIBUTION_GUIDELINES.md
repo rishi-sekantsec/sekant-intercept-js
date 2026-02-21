@@ -2,7 +2,7 @@
 
 ## Getting Started
 
-1.  **Repository**: Clone `sekant_prototyping`.
+1.  **Repository**: Clone repository.
 2.  **Language**: Pure JavaScript (ES Modules). No transpilation (TypeScript/Babel) is currently used, preserving drop-in compatibility.
 3.  **Dependencies**: Zero runtime dependencies. devDependencies are allowed for testing only.
 
@@ -23,21 +23,17 @@
     4.  Update [CONDITIONS_MATCHING_ENGINE.md](CONDITIONS_MATCHING_ENGINE.md).
 
 ### 3. Pull Requests
--   Run the full test suite (`node tests/testInterceptScanner.mjs`) before submitting.
--   Ensure no performance regressions >5% in `Scenario E` (Real World Mix).
+-   Run the full test suite (`npm run test`) before submitting.
+-   Ensure no performance regressions.
 
 ## Release Checklist
 
--   [ ] Run `benchmark.mjs` to verify performance.
 -   [ ] Verify `docs/` are up to date with code changes.
 -   [ ] Check `TODO.md` for blocking issues.
--   [ ] Update version strings (if applicable).
 
 ## Roadmap & Priorities
 
-See `TODO.md` for the current backlog. Key areas of interest:
-1.  **Streaming Support**: Enabling scanning of files larger than 2GB (requires architectural changes to AC engine).
-2.  **Bitwise Precedence Fix**: Aligning operator precedence with standard YARA (see `../general/YARA_GRAMMAR_SUPPORT.md`).
+See `TODO.md` for the current backlog. 
 
 ---
-**Last Updated:** 2026-02-12
+**Last Updated:** 2026-02-21

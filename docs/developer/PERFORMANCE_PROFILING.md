@@ -6,6 +6,8 @@ The scanner is performance-sensitive, as it may run against megabytes of binary 
 
 ## Baseline Metrics (as of Nov 2025)
 
+*These were collected on a Mac M3. Timing may differ on other systems*
+
 | Phase | Scenario | Typical Runtime (ms) | Bottleneck Source |
 |-------|----------|----------------------|-------------------|
 | **AC Search** | Module Heavy (D) | ~54ms (99%) | Byte-by-byte traversal of large binaries when module guards fail. |
@@ -43,4 +45,4 @@ Output focuses on the 5 phases:
 5.  **Condition Eval**: Running the AST.
 
 ---
-**Last Updated:** 2026-02-11
+**Last Updated:** 2026-02-21

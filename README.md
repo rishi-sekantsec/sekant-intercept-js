@@ -18,14 +18,6 @@ The repository includes 900+ unit and integration tests and documentation detail
 
 ---
 
-## Example Videos
-
-[![Watch: Running in a webpage](https://img.youtube.com/vi/w8wsU_hWOz8/0.jpg)](https://youtu.be/w8wsU_hWOz8 "Watch Intercept.js run in a webpage without NW access")
-
-[![Watch: Blocking Downloads](https://img.youtube.com/vi/92jDpF19Eso/0.jpg)](https://youtu.be/92jDpF19Eso "Watch Intercept.js block downloads in the browser")
-
----
-
 ## Use-Cases (MITRE ATT&CK)
 
 * **Neutralize Malicious Paste (T1204.004):** Detect malicious blobs in clipboard buffers before they reach the OS shell.
@@ -35,9 +27,21 @@ The repository includes 900+ unit and integration tests and documentation detail
 
 ---
 
+## Example Videos
+
+### Running in a webpage without network access
+
+[![Watch: Running in a webpage](https://img.youtube.com/vi/w8wsU_hWOz8/0.jpg)](https://youtu.be/w8wsU_hWOz8 "Watch Intercept.js run in a webpage without NW access")
+
+### Running in a browser extension to scan downloads
+
+[![Watch: Blocking Downloads](https://img.youtube.com/vi/92jDpF19Eso/0.jpg)](https://youtu.be/92jDpF19Eso "Watch Intercept.js block downloads in the browser")
+
+---
+
 ## Technical Overview
 
-Intercept.js avoids native bindinds and instead leverages V8’s optimized RegExp engine and JavaScript runtime characteristics:
+Intercept.js avoids native bindings and instead leverages V8’s optimized RegExp engine and JavaScript runtime characteristics:
 
 * **Aho-Corasick Engine:** High-efficiency multi-pattern string matching for thousands of rules in O(n) time.
 * **Hex-to-Regex JIT:** Translates YARA hex strings (with wildcards and jumps) into optimized V8 Regular Expressions for efficient execution.
@@ -173,11 +177,13 @@ We provide detailed documentation for different audiences:
 ### Developer & Architecture
 *   **[Architecture Overview](docs/developer/0_GENERAL_OVERVIEW.md)**: High-level design of the scanning pipeline.
 *   **[AST Reference](docs/developer/AST_REFERENCE.md)**: Internal structure of parsed conditions.
-*   **[Performance Profiling](docs/developer/PERFORMANCE_PROFILING.md)**: How to profile and optimize scan performance.
+*   **[Output Reference](docs/developer/SCAN_OUTPUT_REFERENCE.md)**: Structure of scanner output.
+
 
 ### Module Reference
 *   **[Standard Modules](docs/modules/STANDARD_MODULES.md)**: API reference for built-in modules.
 *   **[PE Module Details](docs/modules/PE_MODULE.md)**: Specifics of the PE parser.
+*   **[Custom Module Details](docs/modules/CUSTOM_MODULE_OVERVIEW.md)**: Overview of Custom Modules.
 
 ---
 
