@@ -351,12 +351,12 @@ const combinedRules = `
 `;
 
 combinedScanner.addRules(combinedRules);
-const combinedResults = await await combinedScanner.scan(combinedData);
+const combinedResults = await combinedScanner.scan(combinedData);
 
 console.log('Combined module analysis:');
 console.log(`  File size: ${combinedData.length} bytes`);
 console.log(`  Entropy: ${combinedMath.entropy(0, combinedData.length).toFixed(2)}`);
-console.log(`  MD5: ${combinedHash.md5(0, combinedData.length)}`);
+console.log(`  MD5: ${await combinedHash.md5(0, combinedData.length)}`);
 console.log(`  Scan time: ${new Date(time.now()).toISOString()}`);
 console.log(`  Detected rules: ${combinedResults.map(r => r.rule).join(', ')}`);
 
