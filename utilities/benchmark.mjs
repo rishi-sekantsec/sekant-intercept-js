@@ -1,5 +1,5 @@
 /**
- * YARA Scanner Performance Benchmark Suite
+ * InterceptScanner Performance Benchmark Suite
  * 
  * Comprehensive benchmarking framework to measure the impact of optimizations.
  * Tests multiple scenarios with detailed timing breakdowns.
@@ -12,7 +12,7 @@
  *   node benchmark.mjs --timing           # Enable detailed timing output
  */
 
-import { YaraScanner } from '../yaraScanner.mjs';
+import { InterceptScanner } from '../src/interceptScanner.mjs';
 import { performance } from 'perf_hooks';
 import { writeFileSync, readFileSync, existsSync } from 'fs';
 import process from 'process';
@@ -679,7 +679,7 @@ async function benchmarkScenario(scenarioId, scenario, runs = RUNS_PER_SCENARIO,
 
   const timingEnabled = Boolean(options.enableTiming);
   const timingLogger = options.timingLogger ?? null;
-  const scanner = new YaraScanner({
+  const scanner = new InterceptScanner({
     timing: {
       enabled: timingEnabled,
       autoPrint: false,
@@ -832,19 +832,38 @@ function printSummary(results) {
   console.log('║                              Summary                                         ║');
   console.log('╚══════════════════════════════════════════════════════════════════════════════╝');
   console.log('');
-  console.log('Scenario │ Rules │ Data Size │ Compile  │ Avg Scan │ Min Scan │ Max Scan');
-  console.log('─────────┼───────┼───────────┼──────────┼──────────┼──────────┼──────────');
+  console.log('Scenario │ Rules │ Data Size │ Compile  │ Avg Scan │ Min Scan │ Max Scan │ Comments');
+  console.log('─────────┼───────┼───────────┼──────────┼──────────┼──────────┼──────────┼───────────────');
   
   for (const [id, result] of Object.entries(results.scenarios)) {
+    let dataSizeStr = result.dataSize;
+    let comment = '';
+    
+    const parenIndex = dataSizeStr.indexOf('(');
+    if (parenIndex !== -1) {
+      const closingParen = dataSizeStr.lastIndexOf(')');
+      if (closingParen !== -1) {
+        comment = dataSizeStr.substring(parenIndex + 1, closingParen);
+        dataSizeStr = dataSizeStr.substring(0, parenIndex).trim();
+      }
+    }
+
+    // Handle "uniform" case specifically to move it to comments
+    if (dataSizeStr.includes('uniform')) {
+      const parts = dataSizeStr.split(' uniform');
+      dataSizeStr = parts[0].trim();
+      comment = comment ? `uniform ${parts[1] || ''}, ${comment}` : `uniform ${parts[1] || ''}`;
+    }
+
     const name = id.padEnd(8);
     const rules = String(result.rules.totalRules).padStart(5);
-    const dataSize = result.dataSize.padEnd(9);
+    const dataSize = dataSizeStr.padEnd(9);
     const compile = `${result.compile.time.toFixed(1)}ms`.padStart(8);
     const avg = `${result.statistics.average.toFixed(1)}ms`.padStart(8);
     const min = `${result.statistics.min.toFixed(1)}ms`.padStart(8);
     const max = `${result.statistics.max.toFixed(1)}ms`.padStart(8);
     
-    console.log(`${name} │ ${rules} │ ${dataSize} │ ${compile} │ ${avg} │ ${min} │ ${max}`);
+    console.log(`${name} │ ${rules} │ ${dataSize} │ ${compile} │ ${avg} │ ${min} │ ${max} │ ${comment}`);
   }
   
   console.log('');
