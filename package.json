@@ -21,7 +21,8 @@
     "example:modules": "node examples/exampleMathModule.mjs && node examples/exampleHashModule.mjs && node examples/examplePEScanner.mjs && node examples/exampleELFScanner.mjs",
     "example:advanced": "node examples/exampleBooleanLiterals.mjs && node examples/exampleConditionsMatch.mjs && node examples/exampleDependentRules.mjs && node examples/exampleCompleteIntegration.mjs && node examples/exampleFilesizeOperator.mjs",
     "build": "node build.mjs",
-    "benchmark": "node tests/benchmark.mjs"
+    "benchmark": "node tests/benchmark.mjs",
+    "compare": "sh tests/runDirectComparison.sh"
   },
   "repository": {
     "type": "git",
