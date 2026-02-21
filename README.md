@@ -229,6 +229,26 @@ npm run vitest vitest/testYaraScanner.test.mjs
 npm run vitest vitest/testComprehensive.test.mjs
 ```
 
+### Run Benchmarks
+
+Check the performance of the scanner across various scenarios:
+
+```bash
+npm run benchmark
+```
+
+This runs a basic benchmark suite testing simple string matching, complex conditions, quantifier heavy rules, and module usage.
+
+### Compare Implementations
+
+Verify correctness against the reference YARA implementation (requires Python and `yara-python`):
+
+```bash
+npm run compare
+```
+
+This script runs a direct comparison between Intercept.js and the native YARA engine on a variety of rule files and test data.
+
 ---
 
 ## ⚡ Performance & Limitations
