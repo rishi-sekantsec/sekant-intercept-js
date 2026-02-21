@@ -16,8 +16,6 @@ This enables expressive logic such as:
 
 The repository includes 900+ unit and integration tests and documentation detailing grammar support and differences from libyara.
 
----
-
 ## Use-Cases (MITRE ATT&CK)
 
 * **Neutralize Malicious Paste (T1204.004):** Detect malicious blobs in clipboard buffers before they reach the OS shell.
@@ -25,19 +23,20 @@ The repository includes 900+ unit and integration tests and documentation detail
 * **Phishing Mitigation (T1566.001):** Perform EDR-like email attachment scanning with email metadata context.
 * **Data Loss Prevention (T1020 / T1115):** Monitor application buffers for PII, secret keys, or exfiltration patterns.
 
----
+## Examples
 
-## Example Videos
-
-### Running in a webpage without network access
+### Running in a webpage without network access (Video)
+See `examples/browser/`
 
 [![Watch: Running in a webpage](https://img.youtube.com/vi/w8wsU_hWOz8/0.jpg)](https://youtu.be/w8wsU_hWOz8 "Watch Intercept.js run in a webpage without NW access")
 
-### Running in a browser extension to scan downloads
+
+### Running in a browser extension to scan downloads (Video)
 
 [![Watch: Blocking Downloads](https://img.youtube.com/vi/92jDpF19Eso/0.jpg)](https://youtu.be/92jDpF19Eso "Watch Intercept.js block downloads in the browser")
 
----
+### Running in Cloudflare Worker (Live) -  [Click Here](https://intercept-js-worker.sekantsec.workers.dev/)
+See `examples/worker/`
 
 ## Technical Overview
 
@@ -291,13 +290,11 @@ Yes. Rule evaluation is deterministic and side-effect free. Custom modules expos
 
 ## Real-World Usage
 
-Intercept.js is used by **Sekant Security** to secure browsers:
+### Intercept.js is used by **Sekant Security** to secure browsers:
+- **Download Protection** - Intercept.js inspects file downloads in-flight to identify malicious artifacts before they are written to disk.
+- **Clipboard Sanitization** - Intercept.js scans clipboard content copied within browsers in real-time, detecting obfuscated / malicious payloads before execution.
 
-### 1. Download Protection
-Intercept.js inspects file downloads in-flight to identify malicious artifacts before they are written to disk.
-
-### 2. Clipboard Sanitization
-Intercept.js scans clipboard content copied within browsers in real-time, detecting obfuscated / malicious payloads before execution.
+### Please let us know if you use Intercept.js in your project!
 
 ---
 
