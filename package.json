@@ -1,6 +1,6 @@
 {
   "name": "sekant-intercept-js",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Context-Aware YARA Runtime Detection for JavaScript Environments",
   "main": "./dist/sekant-intercept.node.mjs",
   "exports": {
