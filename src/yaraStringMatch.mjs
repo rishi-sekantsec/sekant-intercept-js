@@ -188,7 +188,6 @@ function makeTextMatcher(text, opts) {
     for (const { bytes, isWide } of patterns) {
       if (opts.xor) {
         const xorMatches = findXorMatches(data, bytes, opts.xor, opts.allowKey0, singleRun);
-        // console.log(xorMatches);
         matches.push(...xorMatches.map((m) => ({ ...m, length: bytes.length, isWide })));
       } else {
         const plainMatches = findPlainMatches(data, bytes, opts.nocase, singleRun);

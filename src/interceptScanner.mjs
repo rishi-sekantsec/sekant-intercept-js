@@ -589,7 +589,7 @@ export class InterceptScanner {
         };
       }
     } catch (error) {
-      console.log("Failing rule: ", rule);
+      console.debug("Failing rule: ", rule);
       console.trace(error);
     }
     return false;
