@@ -661,12 +661,12 @@ export class InterceptScanner {
 
     // Default: if any string in condition is matched, return true
     // This is a very simple fallback
-    const stringIds = Object.keys(strings);
-    for (const id of stringIds) {
-      if (condition.includes(id) && strings[id].matched) {
-        return { type: "boolean", value: true };
-      }
-    }
+    // const stringIds = Object.keys(strings);
+    // for (const id of stringIds) {
+    //   if (condition.includes(id) && strings[id].matched) {
+    //     return { type: "boolean", value: true };
+    //   }
+    // }
 
     return { type: "boolean", value: false };
   }
