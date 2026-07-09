@@ -215,6 +215,7 @@ export class AhoCorasick {
         results.push({
           id: output.id,
           varName: output.varName,
+          offset: index - output.atomOffset, // byte offset of the start of the full pattern
           index,
           xorKey: output.xorKey,
           matcher: output.matcher,
