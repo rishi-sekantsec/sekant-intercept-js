@@ -63,7 +63,7 @@ The detailed logic of the two main phases.
 ### 4. Quality & Process
 -   [TESTING_AND_QA.md](TESTING_AND_QA.md): How to run the custom testing framework.
 -   [PERFORMANCE_PROFILING.md](PERFORMANCE_PROFILING.md): Performance budgets and profiling tools.
--   [CONTRIBUTION_GUIDELINES.md](CONTRIBUTION_GUIDELINES.md): Code style and contribution workflow.
+-   [CONTRIBUTING.md](CONTRIBUTING.md): Code style and contribution workflow.
 
 ## Key Assumptions
 

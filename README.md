@@ -182,7 +182,7 @@ We provide detailed documentation for different audiences:
 ### Module Reference
 *   **[Standard Modules](docs/modules/STANDARD_MODULES.md)**: API reference for built-in modules.
 *   **[PE Module Details](docs/modules/PE_MODULE.md)**: Specifics of the PE parser.
-*   **[Custom Module Details](docs/modules/CUSTOM_MODULE_OVERVIEW.md)**: Overview of Custom Modules.
+*   **[Custom Module Details](docs/developer/CUSTOM_MODULE_OVERVIEW.md)**: Overview of Custom Modules.
 
 ---
 
@@ -300,7 +300,7 @@ Yes. Rule evaluation is deterministic and side-effect free. Custom modules expos
 
 ## Contributing
 
-We welcome contributions! Please see [CONTRIBUTION_GUIDELINES.md](docs/developer/CONTRIBUTION_GUIDELINES.md) for details on how to get started.
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTIING.md) for details on how to get started.
 
 1.  Fork the repository.
 2.  Create your feature branch (`git checkout -b feature/amazing-feature`).
