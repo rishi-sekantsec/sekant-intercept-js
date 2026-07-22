@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Intercept.js Browser Example</title>
+    <style>
+        body { font-family: sans-serif; max-width: 900px; margin: 0 auto; padding: 20px; }
+        .container { display: flex; flex-direction: column; gap: 20px; }
+        .section { border: 1px solid #ccc; padding: 15px; border-radius: 5px; }
+        .row { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
+        textarea { width: 100%; height: 150px; font-family: monospace; }
+        button { padding: 8px 16px; cursor: pointer; }
+        pre { background: #f5f5f5; padding: 10px; overflow-x: auto; border-radius: 4px; }
+        label { margin-right: 15px; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <h1>Intercept.js Browser Scanner with Context</h1>
+    
+    <div class="container">
+        <!-- Rule Definition Section -->
+        <div class="section">
+            <div class="row" style="justify-content: space-between;">
+                <h2>1. Define YARA Rules</h2>
+                <div>
+                    <button id="btnRuleEx1">Ex 1: Strings</button>
+                    <button id="btnRuleEx2">Ex 2: Conditions</button>
+                    <button id="btnRuleEx3">Ex 3: Modules</button>
+                    <button id="btnRuleEx4">Ex 4: Context</button>
+                </div>
+            </div>
+            <textarea id="rulesInput" placeholder="Enter YARA rules here..."></textarea>
+            <div class="row">
+                <button id="compileBtn">Compile Rules</button>
+                <span id="compileStatus"></span>
+            </div>
+        </div>
+
+        <!-- Content Input Section -->
+        <div class="section">
+            <div class="row" style="justify-content: space-between;">
+                <h2>2. Content to Scan</h2>
+                <div>
+                    <button id="btnTextEx1">Ex 1: Text</button>
+                    <button id="btnTextEx2">Ex 2: Data</button>
+                    <button id="btnTextEx3">Ex 3: PE File</button>
+                </div>
+            </div>
+            <div class="row">
+                <label><input type="radio" name="inputType" value="text" checked> Text Input</label>
+                <label><input type="radio" name="inputType" value="file"> File Upload</label>
+            </div>
+
+            <div id="textInputContainer">
+                <div class="row">
+                    <label>Interpret as:</label>
+                    <select id="textEncoding">
+                        <option value="ascii">ASCII Text</option>
+                        <option value="wide">Wide Text (UTF-16LE)</option>
+                        <option value="hex">Hex Bytes (space separated)</option>
+                        <option value="base64">Base64</option>
+                    </select>
+                </div>
+                <textarea id="contentInput" placeholder="Enter text to scan..."></textarea>
+            </div>
+
+            <div id="fileInputContainer" class="hidden">
+                <input type="file" id="fileInput">
+            </div>
+
+            <div class="row">
+                <button id="scanBtn" disabled>Scan Content</button>
+            </div>
+        </div>
+
+        <!-- Results Section -->
+        <div class="section">
+            <h2>3. Scan Results</h2>
+            <pre id="resultsOutput">Results will appear here...</pre>
+        </div>
+    </div>
+
+    <script type="module">
+        import { InterceptScanner } from './sekant-intercept.browser.mjs';
+        import { BrowserExampleInterceptModule } from './browser_context.mjs';
+
+        // --- Configuration & Data ---
+
+        const SAMPLE_RULES = [
+            {
+                id: 'btnRuleEx1',
+                code: `rule Base64AndNocase {
+    strings:
+        $b64 = "secret_command" base64
+        $nc  = "SuspiciousPattern" nocase
+    condition:
+        $b64 or $nc
+}
+
+rule RegexMatch {
+    strings:
+        // Matches "detect_me" or "detect_it" case-insensitive
+        $re1 = /detect_(me|it)/i
+    condition:
+        $re1
+}
+
+rule HexAndString {
+    strings:
+        $s1 = "malicious"
+        $h1 = { 64 65 74 65 63 74 } // "detect"
+    condition:
+        $s1 and $h1
+}
+
+rule FileSize {
+    condition:
+        filesize > 10
+}`
+            },
+            {
+                id: 'btnRuleEx2',
+                code: `rule LogicCheck {
+    strings:
+        $a = "important"
+        $b = "data"
+    condition:
+        ($a and $b) 
+}
+
+rule NegationCheck {
+    strings:
+        $safe = "safe_mode"
+    condition:
+        not $safe
+}
+
+rule LeakCheck {
+    strings:
+        $leak = "leak"
+        $breach = "breach"
+    condition:
+        any of them
+}`
+            },
+            {
+                id: 'btnRuleEx3',
+                code: `import "pe"
+import "math"
+import "elf"
+
+rule PE_Header_Check {
+    condition:
+        pe.number_of_sections > 0 and 
+        pe.machine == 0x14c // i386
+}
+
+rule HighEntropy_or_MZ {
+    condition:
+        // Entropy > 4.5 OR it is a PE file (MZ signature)
+        math.entropy(0, filesize) > 4.5 or uint16(0) == 0x5A4D
+}
+
+rule SectionLoop {
+    condition:
+        // Check if any section has "text" in the name (often .text)
+        pe.number_of_sections > 0 and
+        for any i in (0..pe.number_of_sections - 1) : ( 
+            pe.sections[i].name contains "text"
+        )
+}
+
+rule ELF_Header_Check {
+    condition:
+        // This should fail for PE files
+        elf.type > 0
+}`
+            },
+{
+                id: 'btnRuleEx4',
+                code: `rule BrowserContextCheck_referrer {
+    meta:
+        description = "Checks presence of leak in payload and referrer in browser context"
+    strings:
+       $leak = "leak"
+    condition:
+        $leak and browser.has_referrer
+    }
+    
+    rule BrowserContextCheck_title {
+    meta:
+        description = "Checks presence of leak in payload and login in title"
+    strings:
+       $leak = "leak"
+    condition:
+        $leak and browser.title_has_word("login")
+    }
+    `
+}
+
+
+        ];
+
+        const SAMPLE_INPUTS = [
+            {
+                id: 'btnTextEx1',
+                label: "Ex 1: Text",
+                encoding: 'ascii',
+                generate: () => "This text contains detect_me and malicious content. Detects c2VjcmV0X2NvbW1hbmQ= and suspiciouspattern."
+            },
+            {
+                id: 'btnTextEx2',
+                label: "Ex 2: Data",
+                encoding: 'ascii',
+                generate: () => "This important data in safe_mode contains a huge leak."
+            },
+            {
+                id: 'btnTextEx3',
+                label: "Ex 3: PE File",
+                encoding: 'hex',
+                generate: () => {
+                     // Valid PE File Construction for YARA PE Module
+                     // 1. DOS Header (64 bytes)
+                     const mz = "4D 5A"; 
+                     const dosStub = "00 ".repeat(58);
+                     const lfanew = "40 00 00 00"; // PE header offset @ 0x40 (64)
+
+                     // 2. PE Header (4 bytes)
+                     const peSig = "50 45 00 00"; // PE\0\0
+                     
+                     // 3. File Header (20 bytes)
+                     // Machine(2), Sections(2), Time(4), SymPtr(4), SymNum(4), OptSize(2), Char(2)
+                     const fileHeader = "4C 01 01 00 00 00 00 00 00 00 00 00 00 00 00 00 E0 00 02 01"; 
+
+                     // 4. Optional Header (224 bytes for PE32)
+                     const optMagic = "0B 01";
+                     const optLinker = "00 00"; 
+                     const optSizeCode = "00 10 00 00"; 
+                     const optSizeInit = "00 10 00 00"; 
+                     const optSizeUninit = "00 00 00 00"; 
+                     const optEntry = "00 10 00 00"; // EntryPoint RVA=0x1000
+                     const optBaseCode = "00 10 00 00"; 
+                     const optBaseData = "00 20 00 00"; 
+
+                     // Windows Specific Fields
+                     const optImageBase = "00 00 40 00"; 
+                     const optSectionAlign = "00 10 00 00"; 
+                     const optFileAlign = "00 02 00 00"; 
+
+                     // Remaining Optional Header padding (184 bytes)
+                     const optRest = "00 ".repeat(184);
+
+                     // 5. Section Header (40 bytes)
+                     const sectName = "2E 74 65 78 74 00 00 00"; // .text
+                     const sectVirtSize = "00 10 00 00"; 
+                     const sectVirtAddr = "00 10 00 00"; 
+                     const sectRawSize = "00 02 00 00"; 
+                     const sectRawPtr = "00 02 00 00"; 
+                     const sectReloc = "00 00 00 00"; 
+                     const sectLines = "00 00 00 00"; 
+                     const sectRelocNum = "00 00"; 
+                     const sectLineNum = "00 00"; 
+                     const sectChar = "20 00 00 60"; 
+                     
+                     const sectionHeader = sectName + sectVirtSize + sectVirtAddr + sectRawSize + sectRawPtr + sectReloc + sectLines + sectRelocNum + sectLineNum + sectChar;
+
+                     // Construct Headers
+                     const headers = mz + dosStub + lfanew + peSig + fileHeader + 
+                                     optMagic + optLinker + optSizeCode + optSizeInit + optSizeUninit + optEntry + optBaseCode + optBaseData +
+                                     optImageBase + optSectionAlign + optFileAlign + optRest + 
+                                     sectionHeader;
+                     
+                     // Padding to FileAlign (512 - 352 = 160 bytes)
+                     const padding = "00 ".repeat(160);
+
+                     // Section Data (512 bytes)
+                     const sectionData = "90 ".repeat(512);
+
+                     return (headers + padding + sectionData).replace(/ /g, "");
+                }
+            }
+        ];
+
+        // --- App State ---
+
+        let scanner = new InterceptScanner({ modules: { browser: new BrowserExampleInterceptModule() } });
+        let isCompiled = false;
+
+        // --- DOM Elements ---
+
+        const els = {
+            rulesInput: document.getElementById('rulesInput'),
+            compileBtn: document.getElementById('compileBtn'),
+            compileStatus: document.getElementById('compileStatus'),
+            scanBtn: document.getElementById('scanBtn'),
+            resultsOutput: document.getElementById('resultsOutput'),
+            contentInput: document.getElementById('contentInput'),
+            textEncoding: document.getElementById('textEncoding'),
+            fileInput: document.getElementById('fileInput'),
+            textInputContainer: document.getElementById('textInputContainer'),
+            fileInputContainer: document.getElementById('fileInputContainer'),
+            inputTypeRadios: document.getElementsByName('inputType')
+        };
+
+        // --- Initialization ---
+
+        function init() {
+            // Bind Rule Buttons
+            SAMPLE_RULES.forEach(sample => {
+                const btn = document.getElementById(sample.id);
+                if (btn) {
+                    btn.onclick = () => els.rulesInput.value = sample.code;
+                }
+            });
+
+            // Bind Input Buttons
+            SAMPLE_INPUTS.forEach(sample => {
+                const btn = document.getElementById(sample.id);
+                if (btn) {
+                    if (sample.label) btn.innerHTML = sample.label;
+                    btn.onclick = () => {
+                        els.contentInput.value = sample.generate();
+                        els.textEncoding.value = sample.encoding;
+                    };
+                }
+            });
+
+            // Bind Setup Logic
+            els.inputTypeRadios.forEach(radio => {
+                radio.addEventListener('change', (e) => {
+                    const isText = e.target.value === 'text';
+                    els.textInputContainer.classList.toggle('hidden', !isText);
+                    els.fileInputContainer.classList.toggle('hidden', isText);
+                });
+            });
+
+            els.compileBtn.addEventListener('click', handleCompile);
+            els.scanBtn.addEventListener('click', handleScan);
+
+            // Default State
+            els.rulesInput.value = SAMPLE_RULES[0].code;
+            document.getElementById(SAMPLE_INPUTS[0].id).click();
+        }
+
+        // --- Handlers ---
+
+        function handleCompile() {
+            try {
+                const rules = els.rulesInput.value;
+                scanner.clearRules(); 
+                scanner.addRules(rules);
+                isCompiled = true;
+                
+                const time = new Date().toLocaleTimeString();
+                els.compileStatus.textContent = `✅ Compiled successfully! (${time})`;
+                els.compileStatus.style.color = "green";
+                els.scanBtn.disabled = false;
+            } catch (err) {
+                console.error(err);
+                isCompiled = false;
+                els.compileStatus.textContent = "❌ Compilation failed: " + err.message;
+                els.compileStatus.style.color = "red";
+                els.scanBtn.disabled = true;
+            }
+        }
+
+        async function handleScan() {
+            if (!isCompiled) return;
+
+            els.resultsOutput.textContent = "Scanning...";
+            
+            try {
+                let dataToScan;
+                const inputType = document.querySelector('input[name="inputType"]:checked').value;
+
+                if (inputType === 'text') {
+                    const text = els.contentInput.value;
+                    const encoding = els.textEncoding.value;
+                    dataToScan = encodeData(text, encoding);
+                } else {
+                    if (els.fileInput.files.length === 0) {
+                        alert("Please select a file.");
+                        return;
+                    }
+                    dataToScan = new Uint8Array(await els.fileInput.files[0].arrayBuffer());
+                }
+
+                const startTime = performance.now();
+                // Generate context metadata for the scan
+                const metadata = { document, url: window.location.href};
+                // Pass context to the scan method
+                const results = await scanner.scan(dataToScan, metadata);
+                const endTime = performance.now();
+                const duration = (endTime - startTime).toFixed(2);
+                
+                displayResults(results, duration);
+
+            } catch (err) {
+                console.error(err);
+                els.resultsOutput.textContent = "Error during scan: " + err.message;
+            }
+        }
+
+        // --- Helpers ---
+
+        function encodeData(text, encoding) {
+            if (encoding === 'ascii') {
+                return new TextEncoder().encode(text);
+            } else if (encoding === 'wide') {
+                const buffer = new Uint8Array(text.length * 2);
+                for (let i = 0; i < text.length; i++) {
+                    const code = text.charCodeAt(i);
+                    buffer[i * 2] = code & 0xff;
+                    buffer[i * 2 + 1] = (code >> 8) & 0xff;
+                }
+                return buffer;
+            } else if (encoding === 'hex') {
+                const hex = text.replace(/[^0-9a-fA-F]/g, '');
+                if (hex.length % 2 !== 0) throw new Error("Invalid hex string length");
+                const buffer = new Uint8Array(hex.length / 2);
+                for (let i = 0; i < hex.length; i += 2) {
+                    buffer[i / 2] = parseInt(hex.substring(i, i + 2), 16);
+                }
+                return buffer;
+            } else if (encoding === 'base64') {
+                const asciiString = atob(text);
+                const buffer = new Uint8Array(asciiString.length);
+                for (let i = 0; i < asciiString.length; i++) {
+                    buffer[i] = asciiString.charCodeAt(i);
+                }
+                return buffer;
+            }
+            return new Uint8Array();
+        }
+
+        function displayResults(results, duration) {
+            if (results.length === 0) {
+                els.resultsOutput.textContent = `No rules matched. (Scan took ${duration} ms)`;
+                return;
+            }
+
+            let output = `Scan completed in ${duration} ms\n`;
+            output += `Matched ${results.length} rules:\n\n`;
+            
+            results.forEach(match => {
+                output += `Rule: ${match.rule}\n`;
+                if (match.meta) {
+                    output += `Metadata: ${JSON.stringify(match.meta, null, 2)}\n`;
+                }
+                
+                if (match.strings) {
+                    output += `Strings:\n`;
+                    Object.keys(match.strings).forEach(strKey => {
+                        const strData = match.strings[strKey];
+                        if (strData.matched) {
+                            output += `  ${strKey}: ${strData.count} match(es)\n`;
+                            strData.matches.forEach(m => {
+                                output += `    Offset: ${m.offset}, Length: ${m.length}\n`;
+                            });
+                        }
+                    });
+                }
+                output += `\n-----------------------------------\n`;
+            });
+
+            els.resultsOutput.textContent = output;
+        }
+
+        // Run Init
+        init();
+
+    </script>
+</body>
+</html>
