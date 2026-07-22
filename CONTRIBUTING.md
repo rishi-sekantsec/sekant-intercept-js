@@ -15,12 +15,12 @@
 -   **Documentation**: JSDoc comments are required for all public classes and complex methods.
 
 ### 2. Adding Features
--   **New Modules**: See [CUSTOM_MODULE_OVERVIEW.md](CUSTOM_MODULE_OVERVIEW.md).
+-   **New Modules**: See [CUSTOM_MODULE_OVERVIEW.md](docs/developer/CUSTOM_MODULE_OVERVIEW.md).
 -   **Grammar Changes**:
     1.  Update `yaraConditionParser.mjs` (Recursive Descent Parser).
     2.  Update `yaraConditionsMatch.mjs` (Evaluator).
     3.  Add tests in `tests/` covering the new syntax.
-    4.  Update [CONDITIONS_MATCHING_ENGINE.md](CONDITIONS_MATCHING_ENGINE.md).
+    4.  Update [CONDITIONS_MATCHING_ENGINE.md](docs/developer//CONDITIONS_MATCHING_ENGINE.md).
 
 ### 3. Pull Requests
 -   Run the full test suite (`npm run test`) before submitting.
