@@ -10,17 +10,22 @@ Unlike standard modules which are hardcoded into the scanner's factory, custom m
 
 ### Base Functions
 
-Every custom module must implement the `BaseCustomModule` interface:
+Every custom module inherits the `BaseCustomModule` interface:
 
-1.  **`getName()`**:
-    -   Returns the keyword used in YARA rules (e.g., `return "secops";` -> checks `secops.score > 5`).
-2.  **`load()`**:
+1. **`constructor()`**:
+    -  Must implement
+    -  Sets the module namespace by calling `super(moduleName)` 
+    -  Note: moduleName should not conflict with standard module names or keywords
+2.  **`async load()`**:
+    -   Optional to implement
     -   **One-time initialization**. usage: Fetching databases, compiling regexes, loading big resources.
     -   Called lazily on the first scan that requires the module.
-3.  **`initialize(data, metadata)`**:
+3.  **`async initialize(data, metadata)`**:
+    -  Must implement
     -   **Per-scan processing**. Receives the raw file byte array.
     -   Returns an "interim result" object (e.g., raw parsed JSON).
 4.  **`createModule(interimResults)`**:
+    -  Must implement
     -   **Per-scan Object Creation**. Converts the interim result into the final object exposed to the JS runtime.
     -   Example: Converts raw JSON `{"score": 10}` into an object with methods if needed.
 
@@ -31,10 +36,19 @@ To use a custom module, register it with the scanner instance before scanning:
 ```javascript
 import { MyCustomModule } from './myModules.js';
 
-const scanner = new InterceptScanner();
+const myCustomModule = new MyCustomModule();
+// Optional: call `await myCustomModule.load();`
+const customModulesMap = {};
+customModulesMap[myCustomModule.getName()] = myCustomModule;
 
-// registerModule(instance)
-scanner.registerModule(new MyCustomModule());
+// Register with scanner during scanner creation
+const scanner = new InterceptScanner({ modules: customModulesMap });
+
+...
+
+const metadata = { ... }; // JSON object with fields based on custom module needs
+scanner.scan(payloadBytes, metadata);
+
 ```
 
 Once registered, the scanner automatically:
@@ -45,15 +59,17 @@ Once registered, the scanner automatically:
 ## Example Implementation
 
 ```javascript
-class ReputationModule {
-    getName() { return "reputation"; }
+export class ReputationModule extends BaseCustomModule {
+    constructor() {
+        super("reputation");
+    }
     
     async load() { 
         this.db = await loadDatabase(); // Expensive/Async
         this.loaded = true;
     }
 
-    async initialize(data) {
+    async initialize(data, metadata) {
         const hash = crypto.createHash('md5').update(data).digest('hex');
         return { hash };
     }
@@ -74,4 +90,4 @@ class ReputationModule {
 2.  **Return Types**: Functions exposed to YARA must return values compatible with the evaluator (boolean, number, string, or undefined).
 
 ---
-**Last Updated:** 2026-02-11
+**Last Updated:** 2026-07-22
