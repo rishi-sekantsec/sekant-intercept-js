@@ -56,7 +56,7 @@ Intercept.js avoids native bindings and instead leverages V8’s optimized RegEx
 ### Installation
 
 ```bash
-git clone https://github.com/sekantsec/sekant-intercept-js.git
+git clone https://github.com/rishi-sekantsec/sekant-intercept-js.git
 cd sekant-intercept-js
 npm install
 npm run build
