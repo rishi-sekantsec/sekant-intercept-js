@@ -6,10 +6,9 @@ export class BrowserExampleInterceptModule extends BaseCustomModule {
   }
 
   async initialize(data, metadata) {
-    metadata = metadata ?? {};
+    metadata = metadata ?? {};    
     const { url, document } = metadata;
     const urlObj = URL.canParse(url) ? new URL(url) : {};
-
     const documentProperties = {};
 
     if (document && typeof document === "object") {
@@ -19,7 +18,7 @@ export class BrowserExampleInterceptModule extends BaseCustomModule {
     }
 
     // Makes all webpage URL components and select document properties available as context
-    const result = { ...urlObj, ...documentProperties };
+    const result = { protocol: urlObj.protocol, host: urlObj.host, pathname: urlObj.pathname, ...documentProperties };
 
     console.log("BrowserExampleInterceptModule initialized with metadata:", result);
 
