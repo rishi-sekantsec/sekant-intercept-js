@@ -1,11 +1,20 @@
 /**
- * Regression tests for regex strings that have a literal prefix.
+ * Regression tests for per-candidate verification attribution.
  *
- * `makeRegexMatcher` compiles one `g`-flagged RegExp and keeps it for the lifetime of the matcher,
- * while the scanner calls that matcher once per Aho-Corasick candidate. An early `break` in a
- * single-run verification (and the MAX_MATCHES cap) left `lastIndex` mid-text, so later candidates
- * started scanning past the match they were supposed to confirm: matches were lost from the third
- * candidate onward and a later offset was reported more than once.
+ * The scanner calls a string matcher once per Aho-Corasick candidate, verifying "is there a match
+ * at this offset?". Two defects made that answer wrong when occurrences overlap:
+ *
+ * - `makeRegexMatcher` compiles one `g`-flagged RegExp for the matcher's lifetime. An early `break`
+ *   in a single run (and the MAX_MATCHES cap) left `lastIndex` mid-text, so later candidates
+ *   scanned past the match they were supposed to confirm: matches were dropped from the third
+ *   candidate onward and a later offset was reported more than once.
+ * - The text matcher searched from the start of its slice, which lies one byte before the
+ *   candidate for fullword context, so it re-reported the previous occurrence and lost its own
+ *   (e.g. `"aa"` on `"aaa"` produced offsets [0,0] instead of [0,1]).
+ *
+ * A verification run must report the candidate's own offset or nothing at all, which is what the
+ * matchers' `verifyAt(data, offset)` entry point does; the plain `matcher(data, offset)` form stays
+ * a window scan.
  */
 
 import { compileYaraLike } from '../src/yaraStringMatch.mjs';
@@ -30,7 +39,7 @@ async function scanMatches(decl, input, scanner = new InterceptScanner({})) {
   return results[0]?.strings?.$m ?? { count: 0, offsets: [] };
 }
 
-printSection('REGEX WITH LITERAL PREFIX - LASTINDEX REGRESSION');
+printSection('STRING CANDIDATE VERIFICATION - ATTRIBUTION');
 
 // ============================================================================
 // Section 1: Scanner-level results (the reported bug)
@@ -78,7 +87,7 @@ await test('2.1 Successive single-run calls each report their own offset', () =>
 
   const data = toBytes(passwordLines(6));
   for (const offset of expectedOffsets(6)) {
-    const matches = matcher(data, offset);
+    const matches = matcher.verifyAt(data, offset);
     assertTrue(matches.length === 1, `candidate at ${offset} verified exactly once`);
     assertEquals(matches[0].offset, offset, `candidate at ${offset} reported at its own offset`);
   }
@@ -88,8 +97,8 @@ await test('2.2 A candidate the regex rejects reports nothing', () => {
   // "password: " is the prefix, but the trailing text has no [0-9] here, so this candidate fails.
   const { matcher } = compileYaraLike('/password: [0-9]+/');
   const data = toBytes('password: abc\npassword: 42\n');
-  assertDeepEquals(matcher(data, 0), [], 'rejected candidate yields no match');
-  assertDeepEquals(matcher(data, 14).map((m) => m.offset), [14], 'valid candidate still resolves');
+  assertDeepEquals(matcher.verifyAt(data, 0), [], 'rejected candidate yields no match');
+  assertDeepEquals(matcher.verifyAt(data, 14).map((m) => m.offset), [14], 'valid candidate still resolves');
 });
 
 await test('2.3 Full-data scans are repeatable', () => {
@@ -99,6 +108,20 @@ await test('2.3 Full-data scans are repeatable', () => {
   const second = matcher(data).map((m) => m.offset);
   assertDeepEquals(first, expectedOffsets(6), 'first full scan');
   assertDeepEquals(second, first, 'second full scan must not inherit lastIndex');
+});
+
+await test('2.3b The window-scan form keeps its documented behaviour', () => {
+  // `matcher(data, offset, maxLength)` scans a window starting at `offset` — it is not an
+  // exact-offset check, and existing callers/tests rely on that. `verifyAt` is the exact form.
+  const data = toBytes('prefix test suffix');
+  for (const decl of ['"test"', '/test/']) {
+    const { matcher } = compileYaraLike(decl);
+    assertDeepEquals(matcher(data, 0).map((m) => m.offset), [7], `${decl}: window from 0 finds the later match`);
+    assertDeepEquals(matcher(data, 7).map((m) => m.offset), [7], `${decl}: window at the match`);
+    assertDeepEquals(matcher(data, 9), [], `${decl}: window past the match finds nothing`);
+    assertDeepEquals(matcher.verifyAt(data, 0), [], `${decl}: exact check at 0 fails`);
+    assertDeepEquals(matcher.verifyAt(data, 7).map((m) => m.offset), [7], `${decl}: exact check at the match`);
+  }
 });
 
 await test('2.4 Overlapping prefixes map to their own matches', () => {
@@ -124,6 +147,49 @@ await test('2.6 Hex matcher is repeatable after hitting the cap', () => {
   const second = matcher(data);
   assertEquals(first.length, 100, 'capped at MAX_MATCHES');
   assertDeepEquals(second, first, 'hex matcher must reset its RegExp between runs');
+});
+
+// ============================================================================
+// Section 3: Overlapping text strings (previously duplicated the prior offset)
+// ============================================================================
+
+console.log('\n📋 Section 3: Overlapping text occurrences\n');
+
+await test('3.1 Overlapping text reports every occurrence', async () => {
+  assertDeepEquals((await scanMatches('$m = "aa"', 'aaa')).offsets, [0, 1], '"aa" on "aaa"');
+  assertDeepEquals((await scanMatches('$m = "aa"', 'aaaa')).offsets, [0, 1, 2], '"aa" on "aaaa"');
+});
+
+await test('3.2 Overlapping text is case-insensitive when nocase', async () => {
+  const result = await scanMatches('$m = "aa" nocase', 'AaAa');
+  assertDeepEquals(result.offsets, [0, 1, 2], 'nocase overlaps');
+});
+
+await test('3.3 Overlapping wide text keeps its alignment', async () => {
+  const data = Buffer.from('a\0a\0a\0', 'latin1');
+  const scanner = new InterceptScanner({});
+  scanner.addRules('rule r {\n  strings:\n    $m = "a" wide\n  condition:\n    #m > 0\n}');
+  const [hit] = await scanner.scan(data);
+  assertDeepEquals(hit.strings.$m.offsets, [0, 2, 4], 'wide overlaps');
+});
+
+await test('3.4 Overlapping xor text keeps every key match', async () => {
+  // "AB" xor(0x01) == "@C"
+  const result = await scanMatches('$m = "AB" xor(0x01)', '@C@C@C');
+  assertDeepEquals(result.offsets, [0, 2, 4], 'xor overlaps');
+});
+
+await test('3.5 Text verification reports its own offset or nothing', () => {
+  const { matcher } = compileYaraLike('"aa"');
+  const data = toBytes('aaa');
+  assertDeepEquals(matcher.verifyAt(data, 0).map((m) => m.offset), [0], 'candidate at 0');
+  assertDeepEquals(matcher.verifyAt(data, 1).map((m) => m.offset), [1], 'candidate at 1');
+  assertDeepEquals(matcher.verifyAt(data, 2), [], 'candidate past the last occurrence matches nothing');
+});
+
+await test('3.6 Non-overlapping text is unaffected', async () => {
+  const result = await scanMatches('$m = "password: "', passwordLines(6));
+  assertDeepEquals(result.offsets, expectedOffsets(6), 'offsets');
 });
 
 // ============================================================================

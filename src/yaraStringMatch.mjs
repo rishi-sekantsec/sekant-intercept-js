@@ -57,17 +57,18 @@ export function compileYaraLike(definition) {
 }
 
 function addOptionsToMatcher(matcher) {
-  return (data, offset = -1, maxLength = MAX_STRING_MATCH_LENGTH) => {
-    // A negative offset means "scan the whole buffer for every match"
+  // Public contract: `offset < 0` scans the whole buffer, otherwise the search window starts at
+  // `offset` (one byte earlier, so fullword checks at the window start can see the preceding byte).
+  const scan = (data, offset = -1, maxLength = MAX_STRING_MATCH_LENGTH, exactIndex = -1) => {
     if (offset < 0) return matcher(data, -1);
-
-    // Single run: start 1 byte before the candidate for fullword context and tell the matcher
-    // where inside the slice the candidate itself starts — clamping to 0 makes the slice base and
-    // the candidate offset collide for candidates at 0 and 1, which is how a verification run ends
-    // up reporting the previous occurrence.
     const start = Math.max(0, offset - 1);
-    return matcher(data.slice(start, start + maxLength), start, offset - start);
+    return matcher(data.slice(start, start + maxLength), start, exactIndex < 0 ? -1 : exactIndex - start);
   };
+
+  // Aho-Corasick candidates ask "is there a match starting exactly here?", which a window scan
+  // cannot answer — its first match may be a neighbouring occurrence.
+  scan.verifyAt = (data, offset) => scan(data, offset, MAX_STRING_MATCH_LENGTH, offset);
+  return scan;
 }
 
 // ╭─────────────────────────────╮
@@ -83,21 +84,21 @@ function makeRegexMatcher(definition) {
   const literalPrefix = getRegexPrefix(pattern, nocase);
   const re = new RegExp(pattern, flags);
 
-  const matcher = (data, offset = -1, candidateIndex = 0) => {
+  const matcher = (data, offset = -1, exactIndex = -1) => {
     const encoder = new TextEncoder();
     const text = new TextDecoder().decode(data);
     const results = [];
     const singleRun = offset >= 0;
+    const exact = exactIndex >= 0;
     // `re` outlives a call: the matcher runs once per Aho-Corasick candidate plus once per full
     // scan, and an early `break` (or the MAX_MATCHES cap) leaves `lastIndex` mid-text. Position it
-    // explicitly on entry, and in a single run start at the candidate's own byte so the offset it
-    // reports is the candidate's, not an earlier occurrence's.
-    const runIndex = singleRun ? candidateIndex : 0;
+    // explicitly on entry instead of inheriting the previous run's position.
+    const runIndex = exact ? exactIndex : 0;
     offset = offset < 0 ? 0 : offset;
     re.lastIndex = runIndex;
     let m;
     while ((m = re.exec(text)) !== null && results.length < MAX_MATCHES) {
-      if (singleRun && m.index > runIndex) break; // prefix hit the regex rejects
+      if (exact && m.index !== runIndex) break; // prefix hit the regex rejects
       const byteIndex  = encoder.encode(text.slice(0, m.index)).length;
       results.push({ offset: byteIndex + offset, length: encoder.encode(m[0]).length });
       re.lastIndex = m.index + 1; // Move forward to find overlapping matches
@@ -190,17 +191,19 @@ function makeTextMatcher(text, opts) {
     }
   }
 
-  const matcher = (data, offset = -1) => {
+  const matcher = (data, offset = -1, exactIndex = -1) => {
     let matches = [];
     const singleRun = offset >= 0;
+    // `exactIndex` (relative to the slice) restricts a single run to the candidate's own byte.
+    const runIndex = exactIndex >= 0 ? exactIndex : -1;
     offset = offset < 0 ? 0 : offset;
 
     for (const { bytes, isWide } of patterns) {
       if (opts.xor) {
-        const xorMatches = findXorMatches(data, bytes, opts.xor, opts.allowKey0, singleRun);
+        const xorMatches = findXorMatches(data, bytes, opts.xor, opts.allowKey0, singleRun, runIndex);
         matches.push(...xorMatches.map((m) => ({ ...m, length: bytes.length, isWide })));
       } else {
-        const plainMatches = findPlainMatches(data, bytes, opts.nocase, singleRun);
+        const plainMatches = findPlainMatches(data, bytes, opts.nocase, singleRun, runIndex);
         matches.push(...plainMatches.map((m) => ({ ...m, length: bytes.length, isWide })));
       }
     }
@@ -223,15 +226,16 @@ function makeTextMatcher(text, opts) {
 // ╭─────────────────────────────╮
 // │ XOR-AWARE MATCHING          │
 // ╰─────────────────────────────╯
-function findXorMatches(data, pattern, keyRange, allowKey0 = true, singleRun = false) {
+function findXorMatches(data, pattern, keyRange, allowKey0 = true, singleRun = false, exactIndex = -1) {
   const [minKey, maxKey] = keyRange;
   const matches = [];
   const pLen = pattern.length;
   const dLen = data.length;
+  const from = exactIndex >= 0 ? exactIndex : 0;
   if (pLen === 0 || pLen > dLen) return matches;
 
   for (let candidateKey = minKey; candidateKey <= maxKey; candidateKey++) {
-    for (let i = 0; i <= dLen - pLen; i++) {
+    for (let i = from; i <= dLen - pLen; i++) {
       let ok = true;
       for (let j = 0; j < pLen; j++) {
         if ((data[i + j] ^ candidateKey) !== pattern[j]) {
@@ -240,7 +244,8 @@ function findXorMatches(data, pattern, keyRange, allowKey0 = true, singleRun = f
         }
       }
       if (ok) {
-        matches.push({ offset: i, key: candidateKey });
+        // An exact run only accepts the requested offset; a later hit belongs to another candidate.
+        if (exactIndex < 0 || i === exactIndex) matches.push({ offset: i, key: candidateKey });
         if (singleRun) break;
       }
     }
@@ -251,15 +256,17 @@ function findXorMatches(data, pattern, keyRange, allowKey0 = true, singleRun = f
 // ╭─────────────────────────────╮
 // │ PLAIN MATCHING              │
 // ╰─────────────────────────────╯
-function findPlainMatches(data, pattern, nocase = false, singleRun = false) {
+function findPlainMatches(data, pattern, nocase = false, singleRun = false, exactIndex = -1) {
   const matches = [];
   const pLen = pattern.length;
   const dLen = data.length;
-  outer: for (let i = 0; i <= dLen - pLen; i++) {
+  const from = exactIndex >= 0 ? exactIndex : 0;
+  outer: for (let i = from; i <= dLen - pLen; i++) {
     for (let j = 0; j < pLen; j++) {
       if ((nocase ? lowercaseByte(data[i + j]) : data[i + j]) !== pattern[j]) continue outer;
     }
-    matches.push({ offset: i });
+    // An exact run only accepts the requested offset; a later hit belongs to another candidate.
+    if (exactIndex < 0 || i === exactIndex) matches.push({ offset: i });
     if (singleRun) break;
   }
   return matches;

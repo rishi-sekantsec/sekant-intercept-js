@@ -208,9 +208,13 @@ export class InterceptScanner {
       const strDef = rule.strings[candidate.varName];
       if (!strDef || !strDef.matcher) continue;
 
-      // For text and regex with literal prefix, verify at the candidate offset
+      // For text and regex with literal prefix, verify at the candidate offset. `verifyAt` demands
+      // a match starting exactly there; the plain window-scan form would also return a neighbouring
+      // occurrence, which duplicates that match and loses this candidate's own.
       if (strDef.type === "text" || (strDef.type === "regex" && strDef.literalPrefix)) {
-        const matches = strDef.matcher(data, candidate.offset);
+        const matches = typeof strDef.matcher.verifyAt === "function"
+          ? strDef.matcher.verifyAt(data, candidate.offset)
+          : strDef.matcher(data, candidate.offset);
         if (matches && matches.length > 0) {
           verified.push({
             ...candidate,

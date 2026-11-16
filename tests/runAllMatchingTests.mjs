@@ -71,10 +71,10 @@ const testSuites = [
     expectedTests: 35
   },
   {
-    name: 'Regex Literal Prefix',
-    file: 'testRegexLiteralPrefix.mjs',
-    description: 'Regex strings with a literal prefix keep all matches (lastIndex reset)',
-    expectedTests: 12
+    name: 'Candidate Attribution',
+    file: 'testCandidateAttribution.mjs',
+    description: 'Per-candidate verification reports its own offset (regex prefix, overlapping text)',
+    expectedTests: 19
   }
 ];
 
