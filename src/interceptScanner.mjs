@@ -416,6 +416,9 @@ export class InterceptScanner {
 
     // Initialize custom modules from this.modules
     // Check each module to see if it's a custom module (has getName() method and non-reserved name)
+    // `modulesWithBinary` already holds the same instances under their registration keys, so the
+    // collision that matters is two *custom* modules claiming one keyword — tracked separately.
+    const claimedKeywords = new Set();
     for (const [key, moduleValue] of Object.entries(this.modules)) {
       try {
         // Check if this is a custom module by seeing if it has the custom module interface
@@ -460,6 +463,14 @@ export class InterceptScanner {
           if (tracker && modulesTiming) {
             tracker.accumulateModule(modulesTiming, moduleName, tracker.now() - moduleStart);
           }
+
+          // Conditions reach a custom module by the keyword its `getName()` returns — the key it was
+          // registered under is irrelevant. Two instances sharing a name therefore overwrite each
+          // other, and the rule silently reads the wrong URL/facts. Say so once per scan.
+          if (claimedKeywords.has(moduleName)) {
+            console.warn(`InterceptScanner: duplicate custom module name "${moduleName}" - the later instance replaces the earlier one`);
+          }
+          claimedKeywords.add(moduleName);
 
           // Add to modules available for condition evaluation
           modulesWithBinary[moduleName] = moduleObject;

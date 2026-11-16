@@ -37,22 +37,8 @@
 
 // Constants
 const PLACEHOLDER_PREFIX = '__LITERAL_';
+const REGEX_PLACEHOLDER_PREFIX = '__REGEX_';
 const PLACEHOLDER_SUFFIX = '__';
-const STRING_WILDCARD_VAR = '$';
-
-const KEYWORD_LITERALS = {
-  TRUE: 'true',
-  FALSE: 'false',
-  FILESIZE: 'filesize',
-  ENTRYPOINT: 'entrypoint'
-};
-
-const QUANTIFIER_KEYWORDS = {
-  ALL: 'all',
-  ANY: 'any',
-  NONE: 'none',
-  THEM: 'them'
-};
 
 // Data access type definitions
 const DATA_ACCESS_TYPES = [
@@ -68,33 +54,6 @@ const DATA_ACCESS_TYPES = [
   { name: 'int32be', bits: 32, signed: true, endian: 'big' }
 ];
 
-// Operator registry
-const OPERATOR_REGISTRY = {
-  string: [
-    { pattern: 'icontains', type: 'icontains' },
-    { pattern: 'contains', type: 'contains' },
-    { pattern: 'istartswith', type: 'istartswith' },
-    { pattern: 'startswith', type: 'startswith' },
-    { pattern: 'iendswith', type: 'iendswith' },
-    { pattern: 'endswith', type: 'endswith' }
-  ],
-  comparison: [
-    { pattern: '==', type: 'equal' },
-    { pattern: '!=', type: 'notEqual' },
-    { pattern: '<=', type: 'lessThanOrEqual' },
-    { pattern: '>=', type: 'greaterThanOrEqual' },
-    { pattern: '<', type: 'lessThan' },
-    { pattern: '>', type: 'greaterThan' }
-  ],
-  arithmetic: [
-    { pattern: '+', type: 'add' },
-    { pattern: '-', type: 'subtract' },
-    { pattern: '*', type: 'multiply' },
-    { pattern: '\\', type: 'divide' },
-    { pattern: '%', type: 'modulo' }
-  ]
-};
-
 /**
  * Utility: Skip whitespace in a string starting from a given index
  * @param {string} str - String to process
@@ -107,22 +66,6 @@ function skipWhitespace(str, startIndex) {
   return index;
 }
 
-/**
- * Utility: Find matching closing parenthesis
- * @param {string} str - String to search
- * @param {number} startIndex - Index of opening paren
- * @returns {number} Index of closing paren, or -1 if not found
- */
-function findMatchingParen(str, startIndex) {
-  let depth = 1;
-  let index = startIndex + 1;
-  while (index < str.length && depth > 0) {
-    if (str[index] === '(') depth++;
-    if (str[index] === ')') depth--;
-    index++;
-  }
-  return depth === 0 ? index : -1;
-}
 
 /**
  * Utility: Check if parentheses wrap the entire expression
@@ -141,92 +84,140 @@ function wrapsEntireExpression(expr) {
 }
 
 /**
- * Check if a string has unescaped quotes in the middle
- * @param {string} str - String to check (including outer quotes)
- * @param {string} quoteChar - Quote character to look for (" or ')
- * @returns {boolean} True if there are unescaped quotes in the middle
+ * Find the closing quote of a string literal, honouring backslash escapes.
+ *
+ * @param {string} text
+ * @param {number} start - index of the opening quote
+ * @param {string} quoteChar - `"` or `'`
+ * @returns {number} index of the closing quote, or -1 when unterminated
  */
-function hasUnescapedQuotesInMiddle(str, quoteChar) {
+function findClosingQuote(text, start, quoteChar) {
   let escaped = false;
-  
-  // Check from position 1 to length-1 (excluding outer quotes)
-  for (let i = 1; i < str.length - 1; i++) {
+  for (let i = start + 1; i < text.length; i++) {
+    const char = text[i];
     if (escaped) {
       escaped = false;
       continue;
     }
-    if (str[i] === '\\') {
+    if (char === '\\') {
       escaped = true;
       continue;
     }
-    if (str[i] === quoteChar) {
-      return true; // Found unescaped quote in middle
+    if (char === quoteChar) return i;
+  }
+  return -1;
+}
+
+/**
+ * Scan a regex literal starting at `start` (a `/`).
+ * Returns null when the text is not a regex literal — an unterminated slash, an empty `//`, or a
+ * newline before the closing slash (which in a rule means the author wrote prose, not a pattern).
+ *
+ * @param {string} text
+ * @param {number} start - index of the opening `/`
+ * @returns {{pattern: string, flags: string, end: number}|null}
+ */
+function scanRegexLiteral(text, start) {
+  let body = '';
+  let inClass = false;
+  let escaped = false;
+
+  for (let i = start + 1; i < text.length; i++) {
+    const char = text[i];
+    if (escaped) {
+      body += char;
+      escaped = false;
+      continue;
     }
-  }
-  
-  return false;
-}
-
-/**
- * Validate if a string is a properly quoted string literal
- * @param {string} str - String to validate (including outer quotes)
- * @param {string} quoteChar - Quote character used (" or ')
- * @returns {boolean} True if valid string literal
- */
-function isValidStringLiteral(str, quoteChar) {
-  // Empty string is valid
-  if (str.length === 2) {
-    return true;
-  }
-  
-  // Check for unescaped quotes in the middle
-  return !hasUnescapedQuotesInMiddle(str, quoteChar);
-}
-
-/**
- * Extract string literals from condition and replace with placeholders
- * Phase 1 of parsing: removes string literals to avoid confusion with operators
- * 
- * @param {string} condition - Raw condition string
- * @returns {Object} { processed: string with placeholders, literals: array of literal info }
- */
-function extractStringLiterals(condition) {
-  const literals = [];
-  let processed = condition;
-  let counter = 0;
-  
-  /**
-   * Helper to extract strings with a specific quote character
-   * @param {string} text - Text to process
-   * @param {string} quoteChar - Quote character (" or ')
-   * @returns {string} Processed text with placeholders
-   */
-  const extractQuoted = (text, quoteChar) => {
-    const regex = new RegExp(`${quoteChar}(?:[^${quoteChar}\\\\]|\\\\.)*${quoteChar}`, 'g');
-    return text.replace(regex, (match) => {
-      if (isValidStringLiteral(match, quoteChar)) {
-        const placeholder = `${PLACEHOLDER_PREFIX}${counter}${PLACEHOLDER_SUFFIX}`;
-        literals.push({
-          id: placeholder,
-          type: 'string',
-          value: match.slice(1, -1) // Remove quotes
-        });
-        counter++;
-        return placeholder;
+    if (char === '\\') {
+      body += char;
+      escaped = true;
+      continue;
+    }
+    if (char === '\n') return null;
+    if (char === '[') inClass = true;
+    else if (char === ']') inClass = false;
+    else if (char === '/' && !inClass) {
+      if (!body) return null; // `//` is not a pattern
+      let end = i + 1;
+      let flags = '';
+      while (end < text.length && /[a-z]/.test(text[end])) {
+        flags += text[end];
+        end += 1;
       }
-      return match; // Keep as-is if invalid
-    });
-  };
-  
-  // Extract double-quoted strings, then single-quoted strings
-  processed = extractQuoted(processed, '"');
-  processed = extractQuoted(processed, "'");
-  
+      return { pattern: body, flags, end };
+    }
+    body += char;
+  }
+
+  return null;
+}
+
+/**
+ * Replace string and regex literals with identifiers before the structure is parsed.
+ * Phase 1 of parsing: without this, `^`, `/` and ` and ` inside a pattern would be read as
+ * operators (`/` is divide and `^` is bitwise-XOR in this grammar).
+ *
+ * String literals go first in the walk, so a `/` inside `"http://host/path"` never starts a
+ * regex, and a quote inside `/[a-z"]+/` never starts a string.
+ *
+ * @param {string} condition - Raw condition string
+ * @returns {Object} { processed, literals } — literals carry { id, type: 'string'|'regex', … }
+ */
+function extractLiterals(condition) {
+  const literals = [];
+  let processed = '';
+  let stringCount = 0;
+  let regexCount = 0;
+  let i = 0;
+
+  while (i < condition.length) {
+    const char = condition[i];
+
+    if (char === '"' || char === "'") {
+      const end = findClosingQuote(condition, i, char);
+      if (end !== -1) {
+        const id = `${PLACEHOLDER_PREFIX}${stringCount}${PLACEHOLDER_SUFFIX}`;
+        literals.push({ id, type: 'string', value: condition.slice(i + 1, end) });
+        stringCount += 1;
+        processed += id;
+        i = end + 1;
+        continue;
+      }
+      processed += char; // Unterminated quote: leave the text alone and let the parser cope.
+      i += 1;
+      continue;
+    }
+
+    if (char === '/') {
+      const regex = scanRegexLiteral(condition, i);
+      if (regex) {
+        const id = `${REGEX_PLACEHOLDER_PREFIX}${regexCount}${PLACEHOLDER_SUFFIX}`;
+        literals.push({ id, type: 'regex', pattern: regex.pattern, flags: regex.flags });
+        regexCount += 1;
+        processed += id;
+        i = regex.end;
+        continue;
+      }
+      processed += char;
+      i += 1;
+      continue;
+    }
+
+    processed += char;
+    i += 1;
+  }
+
   return { processed, literals };
 }
 
+/** True for either placeholder family (`__LITERAL_n__` / `__REGEX_n__`). */
+function isPlaceholderId(name) {
+  return typeof name === 'string' && (name.startsWith(PLACEHOLDER_PREFIX) || name.startsWith(REGEX_PLACEHOLDER_PREFIX));
+}
+
 /**
- * Restore string literals in AST by replacing placeholder identifiers
+ * Restore string and regex literals in AST by replacing placeholder identifiers
  * Phase 3 of parsing: replaces placeholders with actual string literal nodes
  * 
  * @param {Object} ast - AST node to process
@@ -238,10 +229,13 @@ function restoreStringLiterals(ast, literals) {
     return ast;
   }
   
-  // Check if this is a placeholder identifier
-  if (ast.type === 'identifier' && ast.name && ast.name.startsWith(PLACEHOLDER_PREFIX)) {
+  // Check if this is a placeholder identifier (string or regex literal)
+  if (ast.type === 'identifier' && ast.name && isPlaceholderId(ast.name)) {
     const literal = literals.find(lit => lit.id === ast.name);
     if (literal) {
+      if (literal.type === 'regex') {
+        return { type: 'regex', pattern: literal.pattern, flags: literal.flags ?? '' };
+      }
       return { type: 'string', value: literal.value };
     }
   }
@@ -253,9 +247,10 @@ function restoreStringLiterals(ast, literals) {
       if (Array.isArray(result[key])) {
         result[key] = result[key].map(item => {
           // Handle plain string items (like in 'items' arrays)
-          if (typeof item === 'string' && item.startsWith(PLACEHOLDER_PREFIX)) {
+          if (typeof item === 'string' && isPlaceholderId(item)) {
             const literal = literals.find(lit => lit.id === item);
-            return literal ? literal.value : item;
+            if (!literal) return item;
+            return literal.type === 'regex' ? { type: 'regex', pattern: literal.pattern, flags: literal.flags ?? '' } : literal.value;
           }
           // Handle object items
           return typeof item === 'object' ? restoreStringLiterals(item, literals) : item;
@@ -278,13 +273,14 @@ function restoreStringLiterals(ast, literals) {
 export function parseConditionToAST(condition, strings = {}) {
   condition = condition.trim();
   
-  // Phase 1: Extract string literals to avoid parsing confusion
-  const { processed, literals } = extractStringLiterals(condition);
+  // Phase 1: extract string and regex literals so `^`, `/` and ` and ` inside them are not
+  // mistaken for operators
+  const { processed, literals } = extractLiterals(condition);
   
   // Phase 2: Parse structure with placeholders
   const ast = parseStructure(processed, strings);
   
-  // Phase 3: Restore string literals in AST
+  // Phase 3: restore both kinds of literal in the AST
   return restoreStringLiterals(ast, literals);
 }
 
@@ -574,6 +570,8 @@ function parseStructure(condition, strings = {}) {
   // Handle string operators (must check before comparison operators)
   // These are word-based operators that require flexible whitespace matching
   const stringOps = [
+    { pattern: 'matches', type: 'matches' },
+    { pattern: 'iequals', type: 'iequals' },
     { pattern: 'icontains', type: 'icontains' },
     { pattern: 'contains', type: 'contains' },
     { pattern: 'istartswith', type: 'istartswith' },
@@ -649,8 +647,8 @@ function parseExpression(expr) {
     return { type: 'number', value: value * multipliers[unit] };
   }
 
-  // Note: String literals are handled in Phase 1 (extractStringLiterals)
-  // and restored in Phase 3 (restoreStringLiterals).
+  // Note: string and regex literals are masked in Phase 1 (extractLiterals)
+  // and restored as `string` / `regex` nodes in Phase 3 (restoreStringLiterals).
   // By this point, they are placeholders like __LITERAL_0__
 
   // Floating point number (must be checked before member access)
@@ -829,7 +827,7 @@ function parseExpression(expr) {
   // Only consume a primary expression (number, identifier, or parenthesized)
   if (expr.startsWith('~')) {
     const rest = expr.substring(1).trim();
-    let operandEnd = 0;
+    let operandEnd; // assigned in each branch below
     
     // If starts with paren, find matching close paren
     if (rest.startsWith('(')) {

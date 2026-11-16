@@ -200,10 +200,9 @@ export class ConditionEvaluator {
   /**
    * Parse a condition string into an AST
    * This is a simplified parser - in production, use a proper parser
-   * @param {string} condition
    * @returns {Object} AST node
    */
-  parseCondition(condition) {
+  parseCondition() {
     // This would normally use a proper parser (e.g., PEG.js, antlr)
     // For now, return a simple structure
     // In practice, the rule compiler would generate this AST
@@ -230,6 +229,10 @@ export class ConditionEvaluator {
         return node.value;
       case "string":
         return node.value;
+      case "regex":
+        // `/…/flags` in a condition. Compiled lazily on evaluation; an invalid pattern makes the
+        // rule fail (caught per rule by the scanner) rather than silently matching nothing.
+        return new RegExp(node.pattern, (node.flags ?? "").replace(/[gy]/g, ""));
       case "identifier":
         return this.resolveIdentifier(node.name);
 
@@ -1194,7 +1197,7 @@ export class ConditionEvaluator {
       // Handle both sync and async module functions
       return result instanceof Promise ? await result : result;
     } catch (error) {
-      throw new Error(`Error calling ${module}.${functionName}: ${error.message}`);
+      throw new Error(`Error calling ${module}.${functionName}: ${error.message}`, { cause: error });
     }
   }
 
