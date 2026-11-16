@@ -69,6 +69,12 @@ const testSuites = [
     file: 'testWithinOperator.mjs',
     description: 'String proximity - $a within N of $b',
     expectedTests: 35
+  },
+  {
+    name: 'Regex Literal Prefix',
+    file: 'testRegexLiteralPrefix.mjs',
+    description: 'Regex strings with a literal prefix keep all matches (lastIndex reset)',
+    expectedTests: 12
   }
 ];
 

@@ -58,12 +58,15 @@ export function compileYaraLike(definition) {
 
 function addOptionsToMatcher(matcher) {
   return (data, offset = -1, maxLength = MAX_STRING_MATCH_LENGTH) => {
-    // If offset is specified, slice the data accordingly and limit length for matching
-    const singleRun = offset >= 0;
-    // Start 1 byte before to do fullword checks if needed
-    offset = Math.max(0, offset - 1);
-    data = singleRun ? data.slice(offset, offset + maxLength) : data;
-    return matcher(data, singleRun ? offset : -1);
+    // A negative offset means "scan the whole buffer for every match"
+    if (offset < 0) return matcher(data, -1);
+
+    // Single run: start 1 byte before the candidate for fullword context and tell the matcher
+    // where inside the slice the candidate itself starts — clamping to 0 makes the slice base and
+    // the candidate offset collide for candidates at 0 and 1, which is how a verification run ends
+    // up reporting the previous occurrence.
+    const start = Math.max(0, offset - 1);
+    return matcher(data.slice(start, start + maxLength), start, offset - start);
   };
 }
 
@@ -80,14 +83,21 @@ function makeRegexMatcher(definition) {
   const literalPrefix = getRegexPrefix(pattern, nocase);
   const re = new RegExp(pattern, flags);
 
-  const matcher = (data, offset = -1) => {
+  const matcher = (data, offset = -1, candidateIndex = 0) => {
     const encoder = new TextEncoder();
     const text = new TextDecoder().decode(data);
     const results = [];
     const singleRun = offset >= 0;
+    // `re` outlives a call: the matcher runs once per Aho-Corasick candidate plus once per full
+    // scan, and an early `break` (or the MAX_MATCHES cap) leaves `lastIndex` mid-text. Position it
+    // explicitly on entry, and in a single run start at the candidate's own byte so the offset it
+    // reports is the candidate's, not an earlier occurrence's.
+    const runIndex = singleRun ? candidateIndex : 0;
     offset = offset < 0 ? 0 : offset;
+    re.lastIndex = runIndex;
     let m;
     while ((m = re.exec(text)) !== null && results.length < MAX_MATCHES) {
+      if (singleRun && m.index > runIndex) break; // prefix hit the regex rejects
       const byteIndex  = encoder.encode(text.slice(0, m.index)).length;
       results.push({ offset: byteIndex + offset, length: encoder.encode(m[0]).length });
       re.lastIndex = m.index + 1; // Move forward to find overlapping matches
@@ -364,6 +374,9 @@ function makeHexMatcher(hexBody, mods) {
 
     const matches = [];
     let m;
+    // Same shared-instance hazard as the regex matcher: `regex` lives as long as the matcher, so
+    // reset before each run (the MAX_MATCHES cap can leave `lastIndex` mid-string).
+    regex.lastIndex = 0;
     while ((m = regex.exec(hexString)) !== null && matches.length < MAX_MATCHES) {
       // Convert hex string offset to byte offset
       if (m.index % 2 !== 0) { 
