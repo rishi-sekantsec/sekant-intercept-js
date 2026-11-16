@@ -779,6 +779,19 @@ function parseExpression(expr) {
     return { type: 'stringIdentifier', identifier: expr };
   }
 
+  // Extension (not YARA): $a[i] is the i-th matched substring, built from @a[i] and !a[i].
+  // YARA has no indexed form of $a and rejects it as a syntax error.
+  const occurrenceMatch = expr.match(/^\$(\w*)\[([^\]]+)\]$/);
+  if (occurrenceMatch) {
+    const [, name, indexExpr] = occurrenceMatch;
+    const trimmedIndex = indexExpr.trim();
+    return {
+      type: 'stringOccurrence',
+      identifier: `$${name}`,
+      index: /^\d+$/.test(trimmedIndex) ? parseInt(trimmedIndex) : parseExpression(trimmedIndex)
+    };
+  }
+
   // String count #a or just # (for loops)
   if (/^#\w*$/.test(expr)) {
     return { type: 'stringCount', identifier: expr.replace('#', '$') };
@@ -815,10 +828,10 @@ function parseExpression(expr) {
   const offsetIndexed = parseIndexedStringOp(expr, '@', 'stringOffset');
   if (offsetIndexed) return offsetIndexed;
 
-  // String length !a or !$
-  if (/^![\w$]+$/.test(expr)) {
+  // String length !a, !$ or a bare ! (the current string inside a for..of loop)
+  if (/^![\w$]*$/.test(expr)) {
     const id = expr.slice(1); // Remove '!'
-    return { type: 'stringLength', identifier: id.startsWith('$') ? id : `$${id}`, index: 0 };
+    return { type: 'stringLength', identifier: id ? (id.startsWith('$') ? id : `$${id}`) : '$', index: 0 };
   }
 
   // String length !a[expr] - supports !a[n], !a[i], !a[i+1], etc.
@@ -1125,6 +1138,12 @@ function parseExpression(expr) {
   // YARA rule names must start with a letter and contain only alphanumeric characters and underscores
   if (/^[A-Z][a-zA-Z0-9_]*$/.test(expr)) {
     return { type: 'ruleIdentifier', name: expr };
+  }
+
+  // YARA defines no indexed form of `#a` — only `@a[i]` (offset) and `!a[i]` (length) take an
+  // index. Report the construct here instead of failing later with "Unknown identifier".
+  if (/^#\w*\[[^\]]*\]$/.test(expr)) {
+    console.warn(`yaraConditionParser: "${expr}" is not valid YARA - "#${expr.slice(1).split('[')[0]}" is the total count and takes no index`);
   }
 
   // Default: treat as unknown identifier

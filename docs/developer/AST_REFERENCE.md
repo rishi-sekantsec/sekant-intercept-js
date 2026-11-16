@@ -105,7 +105,29 @@ Note: The evaluator forces operands to unsigned 32-bit integers (`>>> 0`) before
 
 // !a[index] (Length)
 { type: 'stringLength', identifier: "$a", index: Node (default 0) }
+
+// $a[index] (Extension - the i-th matched substring; not YARA)
+{ type: 'stringOccurrence', identifier: "$a", index: Node }
 ```
+
+Occurrences are numbered from 1, as in YARA (`@a[1]` is the first match; bare `@a` means index 1
+in YARA and index 0 here).
+
+Deliberate extensions beyond YARA. Every valid YARA rule behaves identically; these only add
+meaning to input YARA rejects, except `$a[i]` which YARA would reject outright:
+
+- `$a[i]` is the i-th matched substring — the bytes at `@a[i]` with length `!a[i]`, decoded as text.
+  Usable anywhere a string is (e.g. `$a[1] matches /^pass/`, `$a[2] contains "word"`); it parses to
+  a `stringOccurrence` node. Out of range, it is `undefined`. YARA has no indexed `$a`.
+- `@a[0]` / `!a[0]` (and therefore `$a[0]`) are treated as the first match (YARA: `undefined`).
+- `!$` is accepted as the length of the current string inside a `for .. of` loop (YARA reports
+  "wrong use of anonymous string"; the portable form is a bare `!`).
+
+Inside a `for .. of` loop the bare symbols `$`, `#`, `@` and `!` refer to the string currently
+being evaluated (e.g. `for all of them : ( # > 3 )`); they parse as the same nodes with
+`identifier: "$"`. YARA has no indexed form of `$a` or `#a` — only `@a[i]` (offset) and `!a[i]`
+(length) take an index. `$a[i]`/`#a[i]` are reported as authoring errors and the rule fails
+closed.
 
 ## Loops & Quantifiers
 

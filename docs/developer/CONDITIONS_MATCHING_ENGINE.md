@@ -30,6 +30,16 @@ The AST (Abstract Syntax Tree) is a JSON-serializable format produced by the `ya
 { type: 'stringLength', identifier: "$a", index: ... } // Condition: !a
 ```
 
+Bare `$`, `#`, `@` and `!` address the current string inside a `for .. of` loop. Only `@a[i]`
+and `!a[i]` accept an index; `#a[i]` is not YARA and is rejected with a warning. Occurrence numbering is 1-based.
+
+Extensions beyond YARA (valid YARA rules behave identically):
+
+- `$a[i]` — the i-th matched substring (bytes at `@a[i]`, length `!a[i]`), usable with the string
+  operators; `undefined` out of range. YARA rejects the syntax.
+- `@a[0]` / `!a[0]` / `$a[0]` — treated as the first match (YARA: undefined).
+- `!$` — the current string's length inside a `for .. of` loop (YARA: error; use a bare `!`).
+
 #### Operations
 ```javascript
 { 

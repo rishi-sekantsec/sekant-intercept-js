@@ -6,6 +6,7 @@
  */
 
 import { InterceptScanner } from "../src/interceptScanner.mjs";
+import { parseConditionToAST } from "../src/yaraConditionParser.mjs";
 import { test, printSummary, printSection } from "./testingFramework.mjs";
 
 // Test helper
@@ -787,6 +788,399 @@ await test("7.5 String proximity - within 10 bytes", async () => {
 
   if (results.length !== 1) {
     throw new Error(`Expected strings within 10 bytes`);
+  }
+});
+
+// ============================================================================
+// SECTION 8: Bare #/@/! inside for..of loops, and non-YARA indexed forms
+// ============================================================================
+console.log('\n📍 SECTION 8: Bare #, @, ! in for..of loops');
+console.log("-".repeat(70));
+
+// Capture console output while scanning (a failing rule logs at debug level)
+async function scanCapturingWarnings(rule, data) {
+  const warnings = [];
+  const originalWarn = console.warn;
+  const originalDebug = console.debug;
+  const originalTrace = console.trace;
+  console.warn = (...args) => warnings.push(args.join(' '));
+  console.debug = () => {};
+  console.trace = () => {};
+  try {
+    const scanner = new InterceptScanner();
+    scanner.addRules(rule);
+    const results = await scanner.scan(data);
+    return { results, warnings };
+  } finally {
+    console.warn = originalWarn;
+    console.debug = originalDebug;
+    console.trace = originalTrace;
+  }
+}
+
+// Test 8.1: Bare ! refers to the current string's first match length
+await test("8.1 Bare ! in for..of (match length)", async () => {
+  const data = createTestData("password: password: ");
+  const rule = `
+    rule BareLength {
+      strings:
+        $m = "password: "
+      condition:
+        for any of them : ( ! == 10 )
+    }
+  `;
+
+  const scanner = new InterceptScanner();
+  scanner.addRules(rule);
+  const results = await scanner.scan(data);
+
+  if (results.length !== 1) {
+    throw new Error(`Expected bare "!" to resolve to the current string's length (10)`);
+  }
+});
+
+// Test 8.2: Bare @ and # still work alongside bare !
+await test("8.2 Bare @, # and ! in one for..of loop", async () => {
+  const data = createTestData("password: password: ");
+  const rule = `
+    rule BareAll {
+      strings:
+        $m = "password: "
+      condition:
+        for all of them : ( # == 2 and @ >= 0 and ! == 10 )
+    }
+  `;
+
+  const scanner = new InterceptScanner();
+  scanner.addRules(rule);
+  const results = await scanner.scan(data);
+
+  if (results.length !== 1) {
+    throw new Error(`Expected bare #, @ and ! to all resolve for each string`);
+  }
+});
+
+// Test 8.3: Indexed ! with the loop variable
+await test("8.3 Indexed !a[i] with a loop variable", async () => {
+  const data = createTestData("password: password: ");
+  const rule = `
+    rule IndexedLengthLoop {
+      strings:
+        $m = "password: "
+      condition:
+        for all i in (1..#m) : ( !m[i] == 10 )
+    }
+  `;
+
+  const scanner = new InterceptScanner();
+  scanner.addRules(rule);
+  const results = await scanner.scan(data);
+
+  if (results.length !== 1) {
+    throw new Error(`Expected !m[i] to return each occurrence's length`);
+  }
+});
+
+// Test 8.4: Indexed @ with the loop variable
+await test("8.4 Indexed @a[i] with a loop variable", async () => {
+  const data = createTestData("password: password: ");
+  const rule = `
+    rule IndexedOffsetLoop {
+      strings:
+        $m = "password: "
+      condition:
+        for all i in (1..#m) : ( @m[i] == (i - 1) * 10 )
+    }
+  `;
+
+  const scanner = new InterceptScanner();
+  scanner.addRules(rule);
+  const results = await scanner.scan(data);
+
+  if (results.length !== 1) {
+    throw new Error(`Expected @m[i] to return each occurrence's offset`);
+  }
+});
+
+// Test 8.5: Indexed ! past the last match is undefined, so the rule does not match
+await test("8.5 Indexed !a[i] out of range", async () => {
+  const data = createTestData("password: password: ");
+  const rule = `
+    rule IndexedLengthOutOfRange {
+      strings:
+        $m = "password: "
+      condition:
+        !m[3] == 10
+    }
+  `;
+
+  const scanner = new InterceptScanner();
+  scanner.addRules(rule);
+  const results = await scanner.scan(data);
+
+  if (results.length !== 0) {
+    throw new Error(`Expected !m[3] on 2 matches to be undefined (no match)`);
+  }
+});
+
+// Test 8.6: !a reports byte length, including for wide strings
+await test("8.6 Length of a wide match is in bytes", async () => {
+  const data = createTestData("a\u0000b\u0000");
+  const rule = `
+    rule WideLength {
+      strings:
+        $m = "ab" wide
+      condition:
+        $m and !m == 4
+    }
+  `;
+
+  const scanner = new InterceptScanner();
+  scanner.addRules(rule);
+  const results = await scanner.scan(data);
+
+  if (results.length !== 1) {
+    throw new Error(`Expected a wide "ab" match to report a length of 4 bytes`);
+  }
+});
+
+// Test 8.7: $m[i] parses to a string occurrence (extension - YARA rejects the syntax)
+await test("8.7 Extension: $m[i] parses to a string occurrence", async () => {
+  const ast = parseConditionToAST("$m[2]");
+
+  if (ast.type !== "stringOccurrence" || ast.identifier !== "$m" || ast.index !== 2) {
+    throw new Error(`Expected { type: "stringOccurrence", identifier: "$m", index: 2 }; got ${JSON.stringify(ast)}`);
+  }
+});
+
+// Test 8.8: #m[i] is not YARA - reported, and the rule fails closed
+await test("8.8 #m[i] is rejected with a clear warning", async () => {
+  const data = createTestData("password: password: ");
+  const rule = `
+    rule UnsupportedCountIndex {
+      strings:
+        $m = "password: "
+      condition:
+        #m[1] == 2
+    }
+  `;
+
+  const { results, warnings } = await scanCapturingWarnings(rule, data);
+
+  if (results.length !== 0) {
+    throw new Error(`Expected "#m[1]" to fail closed`);
+  }
+  if (!warnings.some((w) => w.includes('is not valid YARA') && w.includes('"#m[1]"'))) {
+    throw new Error(`Expected a warning naming "#m[1]"; got: ${warnings.join(' | ')}`);
+  }
+});
+
+// Test 8.9: Extension - !$ means the current string's length (YARA rejects this syntax)
+await test("8.9 Extension: !$ resolves to the current string", async () => {
+  const data = createTestData("password: password: ");
+  const rule = `
+    rule AnonymousDollarLength {
+      strings:
+        $m = "password: "
+      condition:
+        for all of them : ( !$ == 10 )
+    }
+  `;
+
+  const scanner = new InterceptScanner();
+  scanner.addRules(rule);
+  const results = await scanner.scan(data);
+
+  if (results.length !== 1) {
+    throw new Error(`Expected !$ to resolve to the current string's length (extension; YARA errors)`);
+  }
+});
+
+// Test 8.10: Extension - index 0 means the first match (YARA makes @a[0] / !a[0] undefined)
+await test("8.10 Extension: index 0 is the first match", async () => {
+  const data = createTestData("password: password: ");
+  const rule = `
+    rule IndexZeroFirstMatch {
+      strings:
+        $m = "password: "
+      condition:
+        @m[0] == 0 and !m[0] == 10
+    }
+  `;
+
+  const scanner = new InterceptScanner();
+  scanner.addRules(rule);
+  const results = await scanner.scan(data);
+
+  if (results.length !== 1) {
+    throw new Error(`Expected @m[0] / !m[0] to resolve to the first match (extension; YARA: undefined)`);
+  }
+});
+
+// ============================================================================
+// SECTION 9: $a[i] - the i-th matched substring (documented extension, not YARA)
+// ============================================================================
+console.log('\n📍 SECTION 9: $a[i] occurrence extension');
+console.log("-".repeat(70));
+
+// Test 9.1: The occurrence is the matched text
+await test("9.1 $m[1] is the matched substring", async () => {
+  const data = createTestData("password: password: ");
+  const rule = `
+    rule OccurrenceText {
+      strings:
+        $m = "password: "
+      condition:
+        $m[1] == "password: "
+    }
+  `;
+
+  const scanner = new InterceptScanner();
+  scanner.addRules(rule);
+  const results = await scanner.scan(data);
+
+  if (results.length !== 1) {
+    throw new Error(`Expected $m[1] to equal the matched substring`);
+  }
+});
+
+// Test 9.2: Occurrences compose with the string operators
+await test("9.2 $m[i] composes with contains / matches / iequals", async () => {
+  const checks = [
+    { rule: '$m = "password: "', condition: '$m[2] contains "word"', data: "password: password: " },
+    { rule: '$m = /password: v[0-9]/', condition: '$m[2] == "password: v1"', data: "password: v0\npassword: v1\n" },
+    { rule: '$m = "ab" nocase', condition: '$m[2] iequals "AB"', data: "xxABxxab" },
+  ];
+
+  for (const check of checks) {
+    const scanner = new InterceptScanner();
+    scanner.addRules(`
+      rule OccurrenceOps {
+        strings:
+          ${check.rule}
+        condition:
+          ${check.condition}
+      }
+    `);
+    const results = await scanner.scan(createTestData(check.data));
+    if (results.length !== 1) {
+      throw new Error(`Expected ${check.rule} + ${check.condition} to match`);
+    }
+  }
+});
+
+// Test 9.3: Out-of-range occurrences are undefined
+await test("9.3 $m[i] past the last match is undefined", async () => {
+  const data = createTestData("password: password: ");
+  const defined = `
+    rule OccurrenceUndefined {
+      strings:
+        $m = "password: "
+      condition:
+        not defined $m[3]
+    }
+  `;
+  const compared = `
+    rule OccurrenceOutOfRange {
+      strings:
+        $m = "password: "
+      condition:
+        $m[3] == "password: "
+    }
+  `;
+
+  const definedResult = await scanCapturingWarnings(defined, data);
+  const comparedResult = await scanCapturingWarnings(compared, data);
+
+  if (definedResult.results.length !== 1) {
+    throw new Error(`Expected "not defined $m[3]" to match`);
+  }
+  if (comparedResult.results.length !== 0) {
+    throw new Error(`Expected $m[3] to be undefined, so the comparison cannot match`);
+  }
+});
+
+// Test 9.4: Bare $[i] addresses the current string, like bare @ / ! / #
+await test("9.4 $[i] inside for..of uses the current string", async () => {
+  const data = createTestData("password: password: ");
+  const rule = `
+    rule OccurrenceInLoop {
+      strings:
+        $m = "password: "
+      condition:
+        for all of them : ( $[1] == "password: " )
+    }
+  `;
+
+  const scanner = new InterceptScanner();
+  scanner.addRules(rule);
+  const results = await scanner.scan(data);
+
+  if (results.length !== 1) {
+    throw new Error(`Expected $[1] to resolve to the current string's first occurrence`);
+  }
+});
+
+// Test 9.5: The index may be the loop variable
+await test("9.5 $m[i] with a loop variable index", async () => {
+  const data = createTestData("password: password: ");
+  const rule = `
+    rule OccurrenceLoopIndex {
+      strings:
+        $m = "password: "
+      condition:
+        for any i in (1..#m) : ( $m[i] matches /^password:/ )
+    }
+  `;
+
+  const scanner = new InterceptScanner();
+  scanner.addRules(rule);
+  const results = await scanner.scan(data);
+
+  if (results.length !== 1) {
+    throw new Error(`Expected $m[i] to accept the loop variable as its index`);
+  }
+});
+
+// Test 9.6: Occurrences are byte-exact for wide matches
+await test("9.6 $m[1] of a wide match returns the raw bytes", async () => {
+  const data = createTestData("a\u0000b\u0000a\u0000b\u0000");
+  const rule = `
+    rule OccurrenceWide {
+      strings:
+        $m = "ab" wide
+      condition:
+        $m[2] matches /a.b/s
+    }
+  `;
+
+  const scanner = new InterceptScanner();
+  scanner.addRules(rule);
+  const results = await scanner.scan(data);
+
+  if (results.length !== 1) {
+    throw new Error(`Expected the second wide occurrence to match /a.b/s`);
+  }
+});
+
+// Test 9.7: Occurrences work for hex strings, including wildcards
+await test("9.7 $m[1] of a hex match includes wildcard bytes", async () => {
+  const data = createTestData("ABXD");
+  const rule = `
+    rule OccurrenceHex {
+      strings:
+        $m = { 41 42 ?? 44 }
+      condition:
+        $m[1] == "ABXD" and !m[1] == 4
+    }
+  `;
+
+  const scanner = new InterceptScanner();
+  scanner.addRules(rule);
+  const results = await scanner.scan(data);
+
+  if (results.length !== 1) {
+    throw new Error(`Expected the hex occurrence to be "ABXD" with length 4`);
   }
 });
 

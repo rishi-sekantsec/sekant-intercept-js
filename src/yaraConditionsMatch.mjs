@@ -286,6 +286,19 @@ export class ConditionEvaluator {
         }
         return this.getStringLength(node.identifier, index);
       }
+      case "stringOccurrence": {
+        // Extension (not YARA): the i-th matched substring, sliced from the scanned data using
+        // @a[i] for the offset and !a[i] for the length.
+        let index = node.index;
+        if (typeof index === "object" && index !== null) {
+          index = await this.evaluateNode(index);
+        }
+        const offset = this.getStringOffset(node.identifier, index);
+        const length = this.getStringLength(node.identifier, index);
+        if (offset === undefined || length === undefined) return undefined;
+        if (!this.data || typeof this.data.subarray !== "function") return undefined;
+        return new TextDecoder().decode(this.data.subarray(offset, offset + length));
+      }
 
       // Logical operators
       case "and": {
@@ -697,8 +710,7 @@ export class ConditionEvaluator {
     }
 
     // YARA uses 1-indexed arrays: @a or @a[1] = first match, @a[2] = second match
-    // Convert to 0-indexed for JavaScript arrays
-    // Special case: @a (without index) and @a[0] both return first match
+    // Extension: @a[0] is treated like @a (first match); real YARA makes it undefined.
     const arrayIndex = index === 0 ? 0 : index - 1;
     return stringInfo.offsets[arrayIndex];
   }
@@ -725,8 +737,7 @@ export class ConditionEvaluator {
     }
 
     // YARA uses 1-indexed arrays: !a or !a[1] = first match, !a[2] = second match
-    // Convert to 0-indexed for JavaScript arrays
-    // Special case: !a (without index) and !a[0] both return first match
+    // Extension: !a[0] is treated like !a (first match); real YARA makes it undefined.
     const arrayIndex = index === 0 ? 0 : index - 1;
     const match = stringInfo.matches[arrayIndex];
     return match ? match.length : undefined;

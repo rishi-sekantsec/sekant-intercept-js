@@ -396,7 +396,7 @@ function makeHexMatcher(hexBody, mods) {
       //   // Skip non-aligned length matches
       //   continue; 
       // }
-      matches.push({ offset: m.index / 2 });
+      matches.push({ offset: m.index / 2, length: Math.ceil(m[0].length / 2) });
       regex.lastIndex = m.index + 2; // Move forward to find overlapping matches
     }
     return matches;
