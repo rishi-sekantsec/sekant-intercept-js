@@ -81,6 +81,12 @@ const testSuites = [
     file: 'testPrivateRules.mjs',
     description: '"private rule" modifier behavior',
     expectedTests: null
+  },
+  {
+    name: 'Regex Conditions',
+    file: 'testRegexConditions.mjs',
+    description: 'Regex literals with matches/iequals operators',
+    expectedTests: null
   }
 ];
 

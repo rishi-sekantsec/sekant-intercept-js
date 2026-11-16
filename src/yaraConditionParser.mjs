@@ -153,10 +153,52 @@ function scanRegexLiteral(text, start) {
   return null;
 }
 
+// YARA only defines the `i` and `s` regex modifiers (writingrules.html#regular-expressions)
+const YARA_REGEX_FLAGS = new Set(['i', 's']);
+
+/**
+ * Check that a scanned regex literal can actually be compiled.
+ *
+ * @param {string} pattern
+ * @param {string} flags
+ * @returns {string|null} reason the literal is unusable, or null when valid
+ */
+function validateRegexLiteral(pattern, flags) {
+  const unsupported = [...new Set(flags)].filter((flag) => !YARA_REGEX_FLAGS.has(flag));
+  if (unsupported.length > 0) {
+    return `unsupported flag(s) "${unsupported.join('')}" (YARA allows only "i" and "s")`;
+  }
+  try {
+    new RegExp(pattern, flags);
+  } catch (error) {
+    return error.message;
+  }
+  return null;
+}
+
+/**
+ * Find the end (exclusive) of a comment that starts at `start` (`//` or `/*`).
+ * Comments are stripped by the rule compiler, so this only keeps the parser from misreading
+ * comment text when a caller hands it a raw condition.
+ *
+ * @param {string} text
+ * @param {number} start - index of the opening `/`
+ * @returns {number} index just past the comment
+ */
+function findCommentEnd(text, start) {
+  if (text[start + 1] === '/') {
+    const newline = text.indexOf('\n', start + 2);
+    return newline === -1 ? text.length : newline;
+  }
+  const close = text.indexOf('*/', start + 2);
+  return close === -1 ? text.length : close + 2;
+}
+
 /**
  * Replace string and regex literals with identifiers before the structure is parsed.
  * Phase 1 of parsing: without this, `^`, `/` and ` and ` inside a pattern would be read as
- * operators (`/` is divide and `^` is bitwise-XOR in this grammar).
+ * operators (`^` is bitwise-XOR and `and` is logical AND in this grammar; division is `\`, so a
+ * `/` outside a literal is always a mistake).
  *
  * String literals go first in the walk, so a `/` inside `"http://host/path"` never starts a
  * regex, and a quote inside `/[a-z"]+/` never starts a string.
@@ -166,10 +208,18 @@ function scanRegexLiteral(text, start) {
  */
 function extractLiterals(condition) {
   const literals = [];
-  let processed = '';
+  const chunks = [];
   let stringCount = 0;
   let regexCount = 0;
+  let straySlashWarned = false;
+  let chunkStart = 0;
   let i = 0;
+
+  // Append the untouched run of text that ends at `end`, then start a new run there.
+  const flush = (end) => {
+    chunks.push(condition.slice(chunkStart, end));
+    chunkStart = end;
+  };
 
   while (i < condition.length) {
     const char = condition[i];
@@ -180,35 +230,53 @@ function extractLiterals(condition) {
         const id = `${PLACEHOLDER_PREFIX}${stringCount}${PLACEHOLDER_SUFFIX}`;
         literals.push({ id, type: 'string', value: condition.slice(i + 1, end) });
         stringCount += 1;
-        processed += id;
+        flush(i);
+        chunks.push(id);
         i = end + 1;
+        chunkStart = i;
         continue;
       }
-      processed += char; // Unterminated quote: leave the text alone and let the parser cope.
-      i += 1;
+      i += 1; // Unterminated quote: leave the text alone and let the parser cope.
       continue;
     }
 
     if (char === '/') {
+      const marker = condition[i + 1];
+      if (marker === '/' || marker === '*') {
+        i = findCommentEnd(condition, i);
+        continue;
+      }
+
       const regex = scanRegexLiteral(condition, i);
       if (regex) {
         const id = `${REGEX_PLACEHOLDER_PREFIX}${regexCount}${PLACEHOLDER_SUFFIX}`;
-        literals.push({ id, type: 'regex', pattern: regex.pattern, flags: regex.flags });
+        const error = validateRegexLiteral(regex.pattern, regex.flags);
+        if (error) {
+          console.warn(`yaraConditionParser: invalid regex literal /${regex.pattern}/${regex.flags} - ${error}`);
+        }
+        literals.push({ id, type: 'regex', pattern: regex.pattern, flags: regex.flags, error });
         regexCount += 1;
-        processed += id;
+        flush(i);
+        chunks.push(id);
         i = regex.end;
+        chunkStart = i;
         continue;
       }
-      processed += char;
+      // `\` is division in YARA, so a `/` that opens no regex is an authoring error.
+      if (!straySlashWarned) {
+        straySlashWarned = true;
+        console.warn(`yaraConditionParser: "/" does not start a regex literal in condition "${condition.slice(0, 80)}" - integer division is "\\"`);
+      }
       i += 1;
       continue;
     }
 
-    processed += char;
     i += 1;
   }
 
-  return { processed, literals };
+  flush(condition.length);
+
+  return { processed: chunks.join(''), literals };
 }
 
 /** True for either placeholder family (`__LITERAL_n__` / `__REGEX_n__`). */
@@ -217,14 +285,44 @@ function isPlaceholderId(name) {
 }
 
 /**
+ * Build the AST node for a restored regex literal, carrying the validation failure (if any) so
+ * the evaluator can report it instead of silently matching nothing.
+ *
+ * @param {{pattern: string, flags?: string, error?: string|null}} literal
+ * @returns {Object}
+ */
+function makeRegexNode(literal) {
+  const node = { type: 'regex', pattern: literal.pattern, flags: literal.flags ?? '' };
+  if (literal.error) node.error = literal.error;
+  return node;
+}
+
+/**
+ * Human-readable description of a `matches` right-hand operand, for diagnostics.
+ *
+ * @param {Object} node
+ * @returns {string}
+ */
+function describeOperand(node) {
+  if (!node || typeof node !== 'object') return typeof node;
+  if (node.type === 'string') return `string literal "${node.value}"`;
+  if (node.type === 'identifier') return `"${node.name}"`;
+  if (node.type === 'memberAccess') return 'a module/property value';
+  if (node.type === 'functionCall') return 'a function call';
+  if (node.type === 'number' || node.type === 'boolean') return `${node.type} ${node.value}`;
+  return `a "${node.type}" expression`;
+}
+
+/**
  * Restore string and regex literals in AST by replacing placeholder identifiers
  * Phase 3 of parsing: replaces placeholders with actual string literal nodes
- * 
+ *
  * @param {Object} ast - AST node to process
  * @param {Array} literals - Array of literal info from extraction phase
+ * @param {string} condition - Original condition, used for diagnostics
  * @returns {Object} AST with literals restored
  */
-function restoreStringLiterals(ast, literals) {
+function restoreStringLiterals(ast, literals, condition = '') {
   if (!ast || typeof ast !== 'object') {
     return ast;
   }
@@ -234,7 +332,7 @@ function restoreStringLiterals(ast, literals) {
     const literal = literals.find(lit => lit.id === ast.name);
     if (literal) {
       if (literal.type === 'regex') {
-        return { type: 'regex', pattern: literal.pattern, flags: literal.flags ?? '' };
+        return makeRegexNode(literal);
       }
       return { type: 'string', value: literal.value };
     }
@@ -250,17 +348,25 @@ function restoreStringLiterals(ast, literals) {
           if (typeof item === 'string' && isPlaceholderId(item)) {
             const literal = literals.find(lit => lit.id === item);
             if (!literal) return item;
-            return literal.type === 'regex' ? { type: 'regex', pattern: literal.pattern, flags: literal.flags ?? '' } : literal.value;
+            return literal.type === 'regex' ? makeRegexNode(literal) : literal.value;
           }
           // Handle object items
-          return typeof item === 'object' ? restoreStringLiterals(item, literals) : item;
+          return typeof item === 'object' ? restoreStringLiterals(item, literals, condition) : item;
         });
       } else if (typeof result[key] === 'object') {
-        result[key] = restoreStringLiterals(result[key], literals);
+        result[key] = restoreStringLiterals(result[key], literals, condition);
       }
     }
   }
-  
+
+  // YARA requires a regex literal on the right of `matches`. Anything computed during the scan
+  // could become an arbitrary pattern (catastrophic backtracking), so it is rejected here and
+  // the rule fails closed at evaluation.
+  if (result.type === 'matches' && result.right?.type !== 'regex') {
+    result.error = `right operand of "matches" must be a regex literal, got ${describeOperand(result.right)}`;
+    console.warn(`yaraConditionParser: invalid "matches" in condition "${condition.slice(0, 80)}" - ${result.error}`);
+  }
+
   return result;
 }
 
@@ -280,8 +386,8 @@ export function parseConditionToAST(condition, strings = {}) {
   // Phase 2: Parse structure with placeholders
   const ast = parseStructure(processed, strings);
   
-  // Phase 3: restore both kinds of literal in the AST
-  return restoreStringLiterals(ast, literals);
+  // Phase 3: restore both kinds of literal in the AST and validate operator operands
+  return restoreStringLiterals(ast, literals, condition);
 }
 
 /**
@@ -505,18 +611,20 @@ function parseStructure(condition, strings = {}) {
   }
 
   // Handle "not" operator
-  if (condition.startsWith('not ')) {
+  const notMatch = condition.match(/^not\s+([\s\S]+)$/);
+  if (notMatch) {
     return {
       type: 'not',
-      operand: parseStructure(condition.substring(4), strings)
+      operand: parseStructure(notMatch[1], strings)
     };
   }
 
   // Handle "defined" operator
-  if (condition.startsWith('defined ')) {
+  const definedMatch = condition.match(/^defined\s+([\s\S]+)$/);
+  if (definedMatch) {
     return {
       type: 'defined',
-      operand: parseStructure(condition.substring(8), strings)
+      operand: parseStructure(definedMatch[1], strings)
     };
   }
 
@@ -1032,7 +1140,10 @@ function parseExpression(expr) {
  */
 function findOperatorOutsideParens(str, op) {
   const opTrimmed = op.trim();
-  const isWordOp = /^(and|or|not)$/.test(opTrimmed);
+  // Every alphabetic operator (`and`, `or`, `not`, `matches`, `contains`, …) is matched as a whole
+  // word with flexible whitespace, so tab- and newline-indented conditions parse like single-line
+  // ones. Symbol operators must keep the exact-match path.
+  const isWordOp = /^[a-z]+$/.test(opTrimmed);
   
   let parenDepth = 0;
   let bracketDepth = 0;

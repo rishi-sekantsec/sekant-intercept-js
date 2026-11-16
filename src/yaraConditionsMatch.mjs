@@ -159,6 +159,31 @@ export function createScanFacts(data, stringMatches = {}, modules = {}, options 
 }
 
 /**
+ * Compiled regex literals, cached per AST node. Conditions are parsed once per rule per scan and
+ * `for` loops re-evaluate the same node many times, so compiling once per node matters.
+ * `g`/`y` are dropped to keep `test()` stateless across those repeated evaluations.
+ */
+const compiledRegexCache = new WeakMap();
+
+/**
+ * Compile (or fetch) the RegExp for a `regex` AST node.
+ *
+ * @param {Object} node
+ * @returns {RegExp}
+ */
+function compileRegexNode(node) {
+  if (node.error) {
+    throw new Error(`Invalid regex literal /${node.pattern}/${node.flags ?? ''} - ${node.error}`);
+  }
+  let regex = compiledRegexCache.get(node);
+  if (!regex) {
+    regex = new RegExp(node.pattern, (node.flags ?? '').replace(/[gy]/g, ''));
+    compiledRegexCache.set(node, regex);
+  }
+  return regex;
+}
+
+/**
  * YARA Condition Evaluator
  */
 export class ConditionEvaluator {
@@ -230,9 +255,9 @@ export class ConditionEvaluator {
       case "string":
         return node.value;
       case "regex":
-        // `/…/flags` in a condition. Compiled lazily on evaluation; an invalid pattern makes the
-        // rule fail (caught per rule by the scanner) rather than silently matching nothing.
-        return new RegExp(node.pattern, (node.flags ?? "").replace(/[gy]/g, ""));
+        // `/…/flags` in a condition. Compiled once per node and cached; an invalid pattern makes
+        // the rule fail (caught per rule by the scanner) rather than silently matching nothing.
+        return compileRegexNode(node);
       case "identifier":
         return this.resolveIdentifier(node.name);
 
@@ -387,6 +412,10 @@ export class ConditionEvaluator {
       case "iequals":
         return await this.stringEquals(node.left, node.right, true);
       case "matches":
+        // YARA requires a regex literal on the right; the parser flags anything else.
+        if (node.error) {
+          throw new Error(`Invalid "matches" comparison - ${node.error}`);
+        }
         return await this.stringMatches(node.left, node.right);
 
       // Set membership
@@ -1319,20 +1348,17 @@ export class ConditionEvaluator {
     // YARA: string operators return undefined if operands are undefined
     if (this.isAnyUndefined(left, right)) return undefined;
 
+    // The pattern must come from rule text. Compiling a value that was produced during the scan
+    // would allow arbitrary patterns (catastrophic backtracking), so it is rejected outright.
+    if (!(right instanceof RegExp)) {
+      throw new Error(`"matches" requires a regex literal as its right operand, got ${typeof right}`);
+    }
+
     if (typeof left !== "string") {
       return false;
     }
 
-    let regex;
-    if (right instanceof RegExp) {
-      regex = right;
-    } else if (typeof right === "string") {
-      regex = new RegExp(right);
-    } else {
-      return false;
-    }
-
-    return regex.test(left);
+    return right.test(left);
   }
 }
 

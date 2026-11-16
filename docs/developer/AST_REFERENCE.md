@@ -10,7 +10,14 @@ Values directly embedded in the source.
 { type: 'boolean', value: true }
 { type: 'number', value: 42 }
 { type: 'string', value: "some_string" }
+
+// /pattern/flags — only the YARA modifiers `i` and `s` are accepted
+{ type: 'regex', pattern: "evil\\.example", flags: "is" }
+// A literal that fails validation carries the reason; evaluation then throws for that rule
+{ type: 'regex', pattern: "a{2,1}", flags: "", error: "Invalid regular expression: …" }
 ```
+
+Regex literals are compiled once per node and cached, so `for` loops do not recompile the same pattern.
 
 ### Identifiers
 References to global variables or loop variables.
@@ -79,6 +86,11 @@ Note: The evaluator forces operands to unsigned 32-bit integers (`>>> 0`) before
 { type: 'matches', left: Node, right: Node } // Regex match (left matches right)
 { type: 'iequals', left: Node, right: Node } // Case-insensitive equality
 ```
+
+> The right operand of `matches` must be a `regex` literal node. Any other operand — string
+> literal, module/property value, function result — is rejected: the node gets an `error`, a
+> warning is logged while parsing, and the rule fails closed. This keeps the pattern static rule
+> text, as YARA requires, and prevents scan-time patterns from reaching the RegExp constructor.
 
 ### String References
 ```javascript

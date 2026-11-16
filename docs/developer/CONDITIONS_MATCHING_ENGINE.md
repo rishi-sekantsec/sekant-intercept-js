@@ -64,7 +64,19 @@ The AST (Abstract Syntax Tree) is a JSON-serializable format produced by the `ya
 -   `contains`, `icontains` (case-insensitive)
 -   `startswith`, `istartswith`
 -   `endswith`, `iendswith`
--   `matches` (Regex match)
+-   `iequals` (case-insensitive equality)
+-   `matches` (Regex match, e.g. `module.name matches /evil\.example/is`)
+
+> Word operators (`matches`, `contains`, `iequals`, `and`, …) tolerate any whitespace around
+> them, so conditions may be wrapped across lines with spaces or tabs.
+>
+> Regex literals accept only the YARA modifiers `i` (case-insensitive) and `s` (dot matches
+> newlines); any other flag is reported and makes the rule fail. Integer division is `\`, not
+> `/`, so a `/` that opens no regex is reported as an authoring error.
+>
+> The right operand of `matches` must be a regex literal (`module.name matches /evil\.example/is`).
+> A string literal, module value or function result is rejected — the pattern is never built from
+> scan-time data.
 
 ### Scope & Strings
 -   `in` (Set membership or range)
