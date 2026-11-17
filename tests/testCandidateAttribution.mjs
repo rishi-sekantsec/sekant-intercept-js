@@ -149,6 +149,25 @@ await test('2.6 Hex matcher is repeatable after hitting the cap', () => {
   assertDeepEquals(second, first, 'hex matcher must reset its RegExp between runs');
 });
 
+await test('2.7 Scanner maxMatches raises the cap for hex and prefixless regex', async () => {
+  const scanner = new InterceptScanner({ maxMatches: 250 });
+  const hex = await scanMatches('$m = { 41 42 }', 'AB'.repeat(300), scanner);
+  assertEquals(hex.count, 250, 'hex matches honour maxMatches');
+  assertEquals(hex.offsets.length, 250, 'offsets stay in sync with matches');
+
+  const re = await scanMatches('$m = /[0-9]/', '0123456789'.repeat(30), new InterceptScanner({ maxMatches: 250 }));
+  assertEquals(re.count, 250, 'prefixless regex honour maxMatches');
+});
+
+await test('2.8 Changing maxMatches after compile affects already-compiled rules', async () => {
+  const scanner = new InterceptScanner({});
+  const first = await scanMatches('$m = { 41 42 }', 'AB'.repeat(300), scanner);
+  assertEquals(first.count, 100, 'default cap');
+  scanner.maxMatches = 250;
+  const second = await scanner.scan(Buffer.from('AB'.repeat(300), 'latin1'));
+  assertEquals(second[0].strings.$m.count, 250, 'updated limit reaches the compiled matcher');
+});
+
 // ============================================================================
 // Section 3: Overlapping text strings (previously duplicated the prior offset)
 // ============================================================================

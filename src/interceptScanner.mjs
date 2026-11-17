@@ -102,6 +102,7 @@ import { isValidModuleName } from "./interceptCustomModules.mjs";
  * @property {boolean} autoParsePE - Automatically parse PE files (default: true)
  * @property {boolean} autoParseELF - Automatically parse ELF files (default: true)
  * @property {number} maxFileSize - Maximum file size for filesize operator (default: 1MB)
+ * @property {number} maxMatches - Maximum matches recorded per string (default: 100)
  * @property {Object} modules - Available YARA modules (string, time, pe, elf, math, hash)
  */
 export class InterceptScanner {
@@ -113,6 +114,7 @@ export class InterceptScanner {
     this.maxFileSize = 1024 * 1024; // 1MB default limit for filesize operator
     this.setModules(options.modules);
     this.customModules = options.modules || {};
+    this.matchLimits = { maxMatches: options.maxMatches ?? MAX_MATCHES };
     const timingOptions = {
       enabled: options.timing?.enabled ?? options.timing?.enableTiming ?? options.enableTiming ?? false,
       autoPrint: options.timing?.autoPrint ?? options.autoPrint ?? false,
@@ -129,7 +131,7 @@ export class InterceptScanner {
     const tracker = this.timingTracker;
     const timingEnabled = tracker?.isEnabled();
     const start = timingEnabled ? tracker.now() : 0;
-    this.compiledRules = parseYaraRuleGroup(rulesText, this.compiledRules || []);
+    this.compiledRules = parseYaraRuleGroup(rulesText, this.compiledRules || [], { limits: this.matchLimits });
     this.ac = null; // Reset AC automaton to force rebuild
 
     if (timingEnabled) {
@@ -275,11 +277,11 @@ export class InterceptScanner {
 
       if (candidate.matches && candidate.matches.length > 0) {
         // Has detailed match information
-        const prunedList = candidate.matches.length > MAX_MATCHES ? candidate.matches.slice(0, MAX_MATCHES) : candidate.matches;
+        const prunedList = candidate.matches.length > this.maxMatches ? candidate.matches.slice(0, this.maxMatches) : candidate.matches;
         matchInfo.matched = true;
         matchInfo.count += prunedList.length;
         matchInfo.matches.push(...prunedList);
-        matchInfo.offsets.push(...candidate.matches.map((m) => m.offset));
+        matchInfo.offsets.push(...prunedList.map((m) => m.offset));
         // if (prunedList[0].length) {
         //   matchInfo.length = prunedList[0].length;
         // }
@@ -320,7 +322,7 @@ export class InterceptScanner {
         // Run full matcher over entire data (-1 means find ALL matches, not verify at offset 0)
         let matches = strDef.type === "hex" && dataAsHexString !== null ? strDef.matcher(dataAsHexString, -1) : strDef.matcher(data, -1);
         if (matches && matches.length > 0) {
-          const prunedList = matches.length > MAX_MATCHES ? matches.slice(0, MAX_MATCHES) : matches;
+          const prunedList = matches.length > this.maxMatches ? matches.slice(0, this.maxMatches) : matches;
           matchInfo.matched = true;
           matchInfo.count += prunedList.length;
           if (matchInfo.matches.length === 0) {
@@ -328,7 +330,7 @@ export class InterceptScanner {
           } else {
             matchInfo.matches.push(...prunedList);
           }
-          matchInfo.offsets.push(...matches.map((m) => m.offset));
+          matchInfo.offsets.push(...prunedList.map((m) => m.offset));
           // if (prunedList[0].length) {
           //   matchInfo.length = prunedList[0].length;
           // }
@@ -799,6 +801,16 @@ export class InterceptScanner {
    */
   setMaxFileSize(size) {
     this.maxFileSize = size;
+  }
+
+  // Backed by `matchLimits`, the object shared with compiled string matchers, so changing the
+  // cap takes effect for rules that were already compiled.
+  get maxMatches() {
+    return this.matchLimits.maxMatches;
+  }
+
+  set maxMatches(value) {
+    this.matchLimits.maxMatches = value;
   }
 
   /**

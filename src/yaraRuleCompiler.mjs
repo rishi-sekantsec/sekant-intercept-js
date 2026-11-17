@@ -172,7 +172,7 @@ function countBracesOutsideStrings(line) {
   return { openCount, closeCount };
 }
 
-export function parseYaraRuleGroup(multiRuleText, existingRules = []) {
+export function parseYaraRuleGroup(multiRuleText, existingRules = [], options = {}) {
   // Parse and validate import statements before processing rules
   // This will throw an error if an unsupported module is imported
   parseImports(multiRuleText);
@@ -199,7 +199,7 @@ export function parseYaraRuleGroup(multiRuleText, existingRules = []) {
 
       // Handle single-line rules where braces balance immediately
       if (braceDepth === 0 && atleastOneBrace) {
-        rules.push(parseYaraRule(currentRuleText));
+        rules.push(parseYaraRule(currentRuleText, options));
         inRule = false;
         currentRuleText = '';
       }
@@ -212,7 +212,7 @@ export function parseYaraRuleGroup(multiRuleText, existingRules = []) {
       // Check for end of rule
       if (braceDepth === 0) {
         // Complete rule found
-        rules.push(parseYaraRule(currentRuleText));
+        rules.push(parseYaraRule(currentRuleText, options));
         inRule = false;
         currentRuleText = '';
         // console.log("Pushed rule: ", rules[rules.length - 1].name);
@@ -237,7 +237,7 @@ export function parseYaraRuleGroup(multiRuleText, existingRules = []) {
  * @param {string} ruleText - The complete YARA rule text
  * @returns {Object} Parsed rule object with metadata, strings, and condition
  */
-export function parseYaraRule(ruleText) {
+export function parseYaraRule(ruleText, options = {}) {
   // Strip comments before parsing
   ruleText = stripComments(ruleText).trim();
 
@@ -268,7 +268,7 @@ export function parseYaraRule(ruleText) {
   const metadata = parseMetadata(ruleBody);
   
   // Parse strings section
-  const strings = parseStrings(ruleBody);
+  const strings = parseStrings(ruleBody, options);
   
   // Parse condition section
   const condition = parseCondition(ruleBody);
@@ -325,7 +325,7 @@ function parseMetadata(ruleBody) {
  * @param {string} ruleBody - The rule body text
  * @returns {Object} String definitions with their compiled matchers
  */
-function parseStrings(ruleBody) {
+function parseStrings(ruleBody, options = {}) {
   const stringsMatch = ruleBody.match(/strings:\s*([\s\S]*?)(?=condition:|$)/);
   if (!stringsMatch) return {};
   
@@ -356,7 +356,7 @@ function parseStrings(ruleBody) {
       
       try {
         // Compile the string definition into a matcher function
-        const compiledRule = compileYaraLike(definition.trim());
+        const compiledRule = compileYaraLike(definition.trim(), options.limits);
         
         strings[varName] = {
           definition: definition.trim(),

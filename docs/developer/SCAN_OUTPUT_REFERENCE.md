@@ -70,8 +70,8 @@ This section provides evidence for *why* the rule matched.
     -   Strings declared `private` in the rule are structural only and are **removed** from this output.
     -   Anonymous strings (`$ = "pattern"`) are internal and **removed** from this output.
 -   **Limits**:
-    -   `count` and `matches` array are capped at `MAX_MATCHES` (default: 100).
-    -   `length` is capped at `MAX_STRING_MATCH_LENGTH` (default: 2048).
+    -   `count` and `matches` array are capped at the scanner's `maxMatches` (default: 100).
+    -   `length` is the full matched length and is never truncated; only the verifier's scan window is bounded (4096 bytes, `MAX_RE_SCAN_LIMIT`).
 
 ## Usage Example
 

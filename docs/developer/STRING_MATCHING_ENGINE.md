@@ -15,8 +15,8 @@ The string matching engine is responsible for compiling YARA string definitions 
 When the rule compiler processes strings, it generates a "Matcher Object" for each variable. This object encapsulates the logic finding that specific pattern in the data.
 
 ### Limits & Defaults
--   **Max String Match Length**: 2048 bytes (`MAX_STRING_MATCH_LENGTH`). Matches exceeding this length are truncated.
--   **Max Matches Per String**: 100 (`MAX_MATCHES`).
+-   **Verification Scan Window**: 4096 bytes (`MAX_RE_SCAN_LIMIT`, mirroring libyara's `YR_RE_SCAN_LIMIT`). Bounds how far Aho-Corasick candidate verification can see for text strings and literal-prefixed regexes; a match extending past the window is not detected. Hex strings and regexes without a literal prefix are scanned over the full buffer. Reported match `length` values are never truncated.
+-   **Max Matches Per String**: 100 (`MAX_MATCHES`), configurable via the scanner's `maxMatches` option/property. Enforced for hex strings and regexes without a literal prefix; literal text matches are uncapped.
 
 ### Common Structure
 All matcher objects share this interface:

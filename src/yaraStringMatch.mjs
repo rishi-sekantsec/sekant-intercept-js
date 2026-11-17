@@ -14,14 +14,19 @@
  * limitations under the License.
  */
 
-const MAX_STRING_MATCH_LENGTH = 2048;
+
+// Verification window for Aho-Corasick candidates (text and literal-prefixed regex).
+// Mirrors libyara's YR_RE_SCAN_LIMIT (4096); full-buffer scans are unbounded.
+const MAX_RE_SCAN_LIMIT = 4096;
 export const MAX_MATCHES = 100;
+const DEFAULT_MATCH_LIMITS = { maxMatches: MAX_MATCHES };
 
 /**
  * Compile a YARA-like string definition into a matcher function.
  * Supports: text, wide, ascii, xor, base64/base64wide, regex, hex, fullword, nocase
+ * @param {Object} [limits] - Shared `{ maxMatches }` object; read live on every match run
  */
-export function compileYaraLike(definition) {
+export function compileYaraLike(definition, limits = DEFAULT_MATCH_LIMITS) {
   definition = definition.trim();
 
   const isRegex = definition.startsWith("/");
@@ -29,10 +34,10 @@ export function compileYaraLike(definition) {
   const quoteMatch = definition.match(/^"(.*)"(.*)$/);
 
   if (isRegex) {
-    return makeRegexMatcher(definition);
+    return makeRegexMatcher(definition, limits);
   } else if (isHex) {
     const mods = definition.slice(definition.lastIndexOf("}") + 1);
-    return makeHexMatcher(definition.slice(1, definition.lastIndexOf("}")).trim(), mods);
+    return makeHexMatcher(definition.slice(1, definition.lastIndexOf("}")).trim(), mods, limits);
   } else if (quoteMatch) {
     const [, text, modsRaw] = quoteMatch;
     const mods = modsRaw.toLowerCase();
@@ -59,7 +64,7 @@ export function compileYaraLike(definition) {
 function addOptionsToMatcher(matcher) {
   // Public contract: `offset < 0` scans the whole buffer, otherwise the search window starts at
   // `offset` (one byte earlier, so fullword checks at the window start can see the preceding byte).
-  const scan = (data, offset = -1, maxLength = MAX_STRING_MATCH_LENGTH, exactIndex = -1) => {
+  const scan = (data, offset = -1, maxLength = MAX_RE_SCAN_LIMIT, exactIndex = -1) => {
     if (offset < 0) return matcher(data, -1);
     const start = Math.max(0, offset - 1);
     return matcher(data.slice(start, start + maxLength), start, exactIndex < 0 ? -1 : exactIndex - start);
@@ -67,14 +72,14 @@ function addOptionsToMatcher(matcher) {
 
   // Aho-Corasick candidates ask "is there a match starting exactly here?", which a window scan
   // cannot answer — its first match may be a neighbouring occurrence.
-  scan.verifyAt = (data, offset) => scan(data, offset, MAX_STRING_MATCH_LENGTH, offset);
+  scan.verifyAt = (data, offset) => scan(data, offset, MAX_RE_SCAN_LIMIT, offset);
   return scan;
 }
 
 // ╭─────────────────────────────╮
 // │ REGEX MATCHER               │
 // ╰─────────────────────────────╯
-function makeRegexMatcher(definition) {
+function makeRegexMatcher(definition, limits) {
   const mods = definition.split("/").pop().toLowerCase() ?? "";
   const regexFlags = mods.split(" ")[0];
   const isPrivate = /\bprivate\b/.test(mods);
@@ -97,7 +102,7 @@ function makeRegexMatcher(definition) {
     offset = offset < 0 ? 0 : offset;
     re.lastIndex = runIndex;
     let m;
-    while ((m = re.exec(text)) !== null && results.length < MAX_MATCHES) {
+    while ((m = re.exec(text)) !== null && results.length < limits.maxMatches) {
       if (exact && m.index !== runIndex) break; // prefix hit the regex rejects
       const byteIndex  = encoder.encode(text.slice(0, m.index)).length;
       results.push({ offset: byteIndex + offset, length: encoder.encode(m[0]).length });
@@ -330,7 +335,7 @@ function parseXorRange(mods) {
 // Global constant for max jump range when not specified
 const MAX_HEX_JUMP = 10000;
 
-function makeHexMatcher(hexBody, mods) {
+function makeHexMatcher(hexBody, mods, limits) {
   // Parse hex body into regex pattern
   let pattern = "";
   hexBody = hexBody?.toUpperCase().replace(/[^0-9A-F?~|()[\-\]]/g, "") || ""; // Trim invalid chars
@@ -384,7 +389,7 @@ function makeHexMatcher(hexBody, mods) {
     // Same shared-instance hazard as the regex matcher: `regex` lives as long as the matcher, so
     // reset before each run (the MAX_MATCHES cap can leave `lastIndex` mid-string).
     regex.lastIndex = 0;
-    while ((m = regex.exec(hexString)) !== null && matches.length < MAX_MATCHES) {
+    while ((m = regex.exec(hexString)) !== null && matches.length < limits.maxMatches) {
       // Convert hex string offset to byte offset
       if (m.index % 2 !== 0) { 
         // Skip to next aligned position to check

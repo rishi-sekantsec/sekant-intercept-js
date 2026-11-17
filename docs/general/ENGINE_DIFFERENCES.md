@@ -8,8 +8,8 @@ In standard YARA, `import "pe"` is strictly required to use the PE module. In th
 
 ## 2. Match Limits & Optimization
 To prevent excessive memory usage during scanning (especially in browser environments), this engine enforces limits on capture results.
-- **Max Matches**: The engine limits the number of individual string matches recorded per rule to **100** (`MAX_MATCHES`), whereas `libyara` typically records all matches until a much higher system limit.
-- **Match Length Limit**: Individual string matches are capped at **2048 bytes** (`MAX_STRING_MATCH_LENGTH`). Matches longer than this are truncated in the `ScanFacts` result, though the condition logic remains valid.
+- **Max Matches**: The engine limits the number of individual string matches recorded per string to **100** (`MAX_MATCHES`, configurable via the scanner's `maxMatches` option), whereas `libyara` typically records all matches until a much higher system limit.
+- **Verification Scan Window**: For text strings and regexes with a literal prefix, verification is bounded to a **4096-byte** window (`MAX_RE_SCAN_LIMIT`, mirroring `libyara`'s `YR_RE_SCAN_LIMIT`); a match extending beyond it is not detected. Hex strings and regexes without a literal prefix are scanned over the full buffer. Reported match `length` values are never truncated.
 - **Large Arrays**: Output objects containing massive byte arrays may be truncated or summarized to prevent JSON serialization failures or memory exhaustion.
 - **Unbounded Jumps**: Unbounded jumps in hex strings (e.g., `[-]`) are limited to **10,000** bytes (`MAX_HEX_JUMP`) to prevent excessive searching, unlike standard YARA which may search much further.
 - **File Size**: The engine scans the **full content** of the buffer provided to `scan()`.

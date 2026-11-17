@@ -22,7 +22,7 @@ The scanner is performance-sensitive, as it may run against megabytes of binary 
 
 ### 2. Match Building (The "Cloning" Problem)
 -   **Issue**: Rules like `strings: $a = "a" condition: #a > 1000` generate massive arrays of matches.
--   **Mitigation**: We implement a **100-match cap** per string identifier.
+-   **Mitigation**: We implement a **100-match cap** per string identifier, configurable via the scanner's `maxMatches`.
 -   **Future Work**: Stream matches directly to the condition evaluator instead of building arrays.
 
 ### 3. Regex Verification
