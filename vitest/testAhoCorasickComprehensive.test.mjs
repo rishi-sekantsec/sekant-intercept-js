@@ -140,6 +140,25 @@ await test('2.1 Basic nocase matching', () => {
   assertMinMatches(matches, 4, 'Should find 4 case variations');
 });
 
+await test('2.1.1 Nocase atoms coexist with exact-case atoms', () => {
+  const rules = parseYaraRuleGroup(`
+    rule Test {
+      strings:
+        $nocase = "abc" nocase
+        $exact = "ABC"
+      condition:
+        any of them
+    }
+  `);
+  const ac = new AhoCorasick(rules);
+  const matches = ac.search('ABC abc AbC');
+  const nocaseOffsets = matches.filter((match) => match.varName === '$nocase').map((match) => match.offset);
+  const exactOffsets = matches.filter((match) => match.varName === '$exact').map((match) => match.offset);
+
+  assertEquals(nocaseOffsets.join(','), '0,4,8', 'Nocase atom variants should match every case');
+  assertEquals(exactOffsets.join(','), '0', 'Exact-case atoms should not be expanded');
+});
+
 await test('2.2 Multiple nocase patterns', () => {
   const rules = parseYaraRuleGroup(`
     rule Test {

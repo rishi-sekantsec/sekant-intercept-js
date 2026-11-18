@@ -19,8 +19,31 @@ class Node {
     this.children = {}; // edges
     this.fail = null; // failure link
     this.outputs = []; // matched patterns
-    this.nocase = false;
   }
+}
+
+function generateCaseVariants(atom) {
+  const variants = [atom];
+
+  for (let i = 0; i < atom.length; i++) {
+    const code = atom.charCodeAt(i);
+    const alternateCode = code >= 0x61 && code <= 0x7a
+      ? code - 0x20
+      : code >= 0x41 && code <= 0x5a
+        ? code + 0x20
+        : null;
+
+    if (alternateCode === null) continue;
+
+    const existingCount = variants.length;
+    for (let j = 0; j < existingCount; j++) {
+      const variant = variants[j].split("");
+      variant[i] = String.fromCharCode(alternateCode);
+      variants.push(variant.join(""));
+    }
+  }
+
+  return variants;
 }
 
 // Rule structure example:
@@ -88,6 +111,7 @@ export class AhoCorasick {
   }
 
   generateAtoms(patterns, atomLength = 3) {
+    const casePatterns = [];
     const xorPatterns = [];
 
     for (const p of patterns) {
@@ -102,6 +126,12 @@ export class AhoCorasick {
       }
       p.atomLength = p.atom.length;
       p.length = p.pattern.length;
+
+      if (p.nocase && !p.xor) {
+        for (const atom of generateCaseVariants(p.atom).slice(1)) {
+          casePatterns.push({ ...p, atom });
+        }
+      }
 
       if (p.xor) {
         const [minKey, maxKey] = p.xor;
@@ -123,7 +153,7 @@ export class AhoCorasick {
       // delete p.pattern;
     }
 
-    patterns.push(...xorPatterns);
+    patterns.push(...casePatterns, ...xorPatterns);
   }
 
   buildTrie(patterns) {
@@ -134,7 +164,6 @@ export class AhoCorasick {
         const ch = p.atom[i];
         if (!node.children[ch]) node.children[ch] = new Node();
         node = node.children[ch];
-        node.nocase = p.nocase ?? false;
       }
       node.outputs.push(p);
     }
@@ -144,7 +173,7 @@ export class AhoCorasick {
   printTrie() {
     const traverse = (node, prefix) => {
       for (const [ch, child] of Object.entries(node.children)) {
-        console.log(`${prefix}${ch} (nocase: ${child.nocase}) (children: [${Object.keys(child.children)}]) (outputs: ${child.outputs.length})`);
+        console.log(`${prefix}${ch} (children: [${Object.keys(child.children)}]) (outputs: ${child.outputs.length})`);
         traverse(child, prefix + "  ");
       }
     };
@@ -165,7 +194,6 @@ export class AhoCorasick {
       for (const [ch, nextNode] of Object.entries(current.children)) {
         queue.push(nextNode);
 
-        // Compute failure link
         let fail = current.fail;
         while (fail && !fail.children[ch]) {
           fail = fail.fail;
@@ -188,21 +216,16 @@ export class AhoCorasick {
       // For Uint8Array, ch is a number (byte value); convert to character
       // For string, ch is already a character
       const charValue = typeof ch === "number" ? String.fromCharCode(ch) : ch;
-      const lowerCharValue = charValue.toLowerCase();
 
-      // console.log(`i=${i}, ch=${ch}, charValue='${charValue}', lower='${lowerCharValue}'`);
+      // console.log(`i=${i}, ch=${ch}, charValue='${charValue}'`);
 
       // Follow failure links until we find a valid transition
-      while (node && !(node.children[charValue] || (node.children[lowerCharValue] && node.children[lowerCharValue].nocase))) {
+      while (node && !node.children[charValue]) {
         node = node.fail;
       }
 
       if (!node) node = this.root;
-      else {
-        if (node.children[charValue]) node = node.children[charValue];
-        else if (node.children[lowerCharValue]?.nocase) node = node.children[lowerCharValue];
-        else node = this.root; // Should never happen due to the while loop above
-      }
+      else node = node.children[charValue];
 
       // Do not report matches for root node (zero-length patterns)
       if (node === this.root) continue;
