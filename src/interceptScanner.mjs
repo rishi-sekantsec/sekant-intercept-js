@@ -26,7 +26,7 @@
  */
 
 import { AhoCorasick } from "./ahocorasickEngine.mjs";
-import { parseYaraRuleGroup } from "./yaraRuleCompiler.mjs";
+import { parseYaraRuleGroup, parseInterceptFilterRuleGroup } from "./yaraRuleCompiler.mjs";
 import { createScanFacts, evaluateCondition } from "./yaraConditionsMatch.mjs";
 import { parseConditionToAST } from "./yaraConditionParser.mjs";
 import { parsePEYara, createPEModule } from "./peModule.mjs";
@@ -38,6 +38,23 @@ import { string as stringModule } from "./stringModule.mjs";
 import { createPerformanceTracker } from "./performanceInstrumentation.mjs";
 import { MAX_MATCHES } from "./yaraStringMatch.mjs";
 import { isValidModuleName } from "./interceptCustomModules.mjs";
+
+/**
+ * Longest candidate buffer handed to filter rules. Longer matches keep the candidate and skip
+ * filtering, so a filter never decides on a truncated prefix.
+ */
+export const MAX_FILTER_RULE_BUFFER_SIZE = 4096;
+
+const FILTER_MODULE_BUILTINS = new Set(["string", "time", "math", "hash"]);
+
+function hashBytes(bytes) {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < bytes.length; i++) {
+    hash ^= bytes[i];
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash;
+}
 
 /**
  * InterceptScanner - A JavaScript implementation of YARA rule scanning engine
@@ -108,6 +125,12 @@ import { isValidModuleName } from "./interceptCustomModules.mjs";
 export class InterceptScanner {
   constructor(options = {}) {
     this.compiledRules = [];
+    this.compiledFilterRules = [];
+    this.filterIndex = new Map();
+    this.filterDiagnostics = [];
+    this.filterScanDiagnostics = null;
+    this.filterDecisionCache = new Map();
+    this.filterModuleCache = new Map();
     this.ac = null;
     this.autoParsePE = true; // Automatically parse PE files
     this.autoParseELF = true; // Automatically parse ELF files
@@ -131,7 +154,17 @@ export class InterceptScanner {
     const tracker = this.timingTracker;
     const timingEnabled = tracker?.isEnabled();
     const start = timingEnabled ? tracker.now() : 0;
+
+    const filterGroup = parseInterceptFilterRuleGroup(rulesText, this.compiledFilterRules || [], {
+      limits: this.matchLimits,
+      availableModules: this.getAvailableModuleNames(),
+    });
+    this.compiledFilterRules = filterGroup.rules;
+    this.filterDiagnostics = filterGroup.diagnostics || [];
     this.compiledRules = parseYaraRuleGroup(rulesText, this.compiledRules || [], { limits: this.matchLimits });
+    this.validateFilterRegistry();
+    this.rebuildFilterIndex();
+
     this.ac = null; // Reset AC automaton to force rebuild
 
     if (timingEnabled) {
@@ -154,6 +187,12 @@ export class InterceptScanner {
    */
   clearRules() {
     this.compiledRules = [];
+    this.compiledFilterRules = [];
+    this.filterIndex = new Map();
+    this.filterDiagnostics = [];
+    this.filterScanDiagnostics = null;
+    this.filterDecisionCache = new Map();
+    this.filterModuleCache = new Map();
     this.ac = null;
   }
 
@@ -233,13 +272,15 @@ export class InterceptScanner {
   }
 
   /**
-   * Build string match results per rule
+   * Build string match results per rule. Reject filters are applied here, before any facts are
+   * produced, so `#a`, `@a`, and `$a at N` only see surviving matches.
    * @param {Array} verifiedCandidates - Verified matches
    * @param {Array} rules - Compiled rules
    * @param {Uint8Array} data - File data
-   * @returns {Object} String matches organized by rule
+   * @param {Object} metadata - Scan metadata to pass to custom modules
+   * @returns {Promise<Object>} String matches organized by rule
    */
-  buildStringMatches(verifiedCandidates, rules, data) {
+  async buildStringMatches(verifiedCandidates, rules, data, metadata = {}) {
     const ruleMatches = {};
 
     // Initialize match structure for each rule
@@ -274,10 +315,20 @@ export class InterceptScanner {
        const lookupKey = ruleMatches[candidate.id][finalKey] ? finalKey : (finalKey.startsWith('$') ? finalKey : `\$${finalKey}`);
        
       const matchInfo = ruleMatches[candidate.id][lookupKey];
+      const ownerRule = rules.find((rule) => rule.id === candidate.id);
+      const strDef = ownerRule?.strings?.[candidate.varName];
 
       if (candidate.matches && candidate.matches.length > 0) {
+        const keptMatches = strDef?.reject?.length
+          ? await this.filterMatches(strDef, candidate.matches, data, metadata, {
+              ruleName: ownerRule?.name,
+              varName: candidate.varName,
+            })
+          : candidate.matches;
+        if (keptMatches.length === 0) continue;
+
         // Has detailed match information
-        const prunedList = candidate.matches.length > this.maxMatches ? candidate.matches.slice(0, this.maxMatches) : candidate.matches;
+        const prunedList = keptMatches.length > this.maxMatches ? keptMatches.slice(0, this.maxMatches) : keptMatches;
         matchInfo.matched = true;
         matchInfo.count += prunedList.length;
         matchInfo.matches.push(...prunedList);
@@ -321,6 +372,9 @@ export class InterceptScanner {
 
         // Run full matcher over entire data (-1 means find ALL matches, not verify at offset 0)
         let matches = strDef.type === "hex" && dataAsHexString !== null ? strDef.matcher(dataAsHexString, -1) : strDef.matcher(data, -1);
+        if (strDef.reject?.length && matches && matches.length > 0) {
+          matches = await this.filterMatches(strDef, matches, data, metadata, { ruleName: rule.name, varName });
+        }
         if (matches && matches.length > 0) {
           const prunedList = matches.length > this.maxMatches ? matches.slice(0, this.maxMatches) : matches;
           matchInfo.matched = true;
@@ -339,6 +393,351 @@ export class InterceptScanner {
     }
 
     return ruleMatches;
+  }
+
+  /**
+   * Reject filter registry / gate helpers
+   */
+
+  validateFilterRegistry() {
+    const ruleNames = new Set(this.compiledRules.map((rule) => rule.name));
+    for (const filter of this.compiledFilterRules) {
+      if (ruleNames.has(filter.name)) {
+        throw new Error(`Filter rule "${filter.name}" collides with a rule of the same name`);
+      }
+    }
+
+    const filterNames = new Set(this.compiledFilterRules.map((filter) => filter.name));
+    for (const rule of this.compiledRules) {
+      for (const [varName, strDef] of Object.entries(rule.strings || {})) {
+        for (const filterName of strDef.reject ?? []) {
+          if (!filterNames.has(filterName)) {
+            this.filterDiagnostics.push({
+              code: "unknown-filter-rule",
+              severity: "warning",
+              message: `String ${varName} in rule "${rule.name}" references unknown filter rule "${filterName}"`,
+              rule: rule.name,
+              string: varName,
+              filter: filterName,
+            });
+          }
+        }
+      }
+    }
+  }
+
+  rebuildFilterIndex() {
+    this.filterIndex = new Map(this.compiledFilterRules.map((rule) => [rule.name, rule]));
+  }
+
+  /**
+   * Module keywords available to filter conditions. Custom modules are addressed by the keyword
+   * their `getName()` returns, which need not match the key they were registered under.
+   */
+  getAvailableModuleNames() {
+    const names = new Set(Object.keys(this.modules || {}));
+    for (const moduleValue of Object.values(this.modules || {})) {
+      if (typeof moduleValue?.getName === "function") {
+        names.add(moduleValue.getName());
+      }
+    }
+    return [...names];
+  }
+
+  ensureFilterScanDiagnostics() {
+    if (!this.filterScanDiagnostics) {
+      this.filterScanDiagnostics = { oversized: new Map(), errors: new Map(), rejections: new Map() };
+    }
+    return this.filterScanDiagnostics;
+  }
+
+  resetFilterScanState() {
+    this.filterScanDiagnostics = { oversized: new Map(), errors: new Map(), rejections: new Map() };
+    this.filterDecisionCache = new Map();
+    this.filterModuleCache = new Map();
+  }
+
+  async filterMatches(strDef, matches, data, metadata, context = {}) {
+    if (!strDef || !Array.isArray(strDef.reject) || strDef.reject.length === 0) return matches;
+
+    const kept = [];
+    for (const match of matches) {
+      if (await this.isRejectedMatch(strDef, match, data, metadata, context)) continue;
+      kept.push(match);
+    }
+    return kept;
+  }
+
+  async isRejectedMatch(strDef, match, data, metadata, { ruleName, varName } = {}) {
+    const filterNames = strDef?.reject;
+    if (!Array.isArray(filterNames) || filterNames.length === 0) return false;
+
+    const length = match?.length ?? 0;
+    if (length <= 0) return false;
+
+    const diagnostics = this.ensureFilterScanDiagnostics();
+
+    if (length > MAX_FILTER_RULE_BUFFER_SIZE) {
+      const key = `${ruleName}:${varName}:${match.offset}:${length}`;
+      if (!diagnostics.oversized.has(key)) {
+        diagnostics.oversized.set(key, {
+          code: "filter-buffer-too-large",
+          severity: "warning",
+          message: `Candidate for ${varName} in rule "${ruleName}" is ${length} bytes, exceeding MAX_FILTER_RULE_BUFFER_SIZE (${MAX_FILTER_RULE_BUFFER_SIZE}); filters were skipped`,
+          rule: ruleName,
+          string: varName,
+        });
+      }
+      return false;
+    }
+
+    const buffer = data.subarray(match.offset, match.offset + length);
+
+    for (const filterName of filterNames) {
+      const filter = this.filterIndex.get(filterName);
+      if (!filter) continue; // Unknown names are ignored (diagnosed at compile time)
+
+      if (await this.getFilterDecision(filter, buffer, metadata)) {
+        diagnostics.rejections.set(filterName, (diagnostics.rejections.get(filterName) ?? 0) + 1);
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  async getFilterDecision(filter, buffer, metadata) {
+    const cacheKey = `${filter.name}:${buffer.length}:${hashBytes(buffer)}`;
+    const cached = this.filterDecisionCache.get(cacheKey);
+    if (cached && cached.buffer.length === buffer.length && cached.buffer.every((byte, i) => byte === buffer[i])) {
+      return cached.rejected;
+    }
+
+    const rejected = await this.evaluateFilterRule(filter, buffer, metadata);
+    this.filterDecisionCache.set(cacheKey, { buffer, rejected });
+    return rejected;
+  }
+
+  async evaluateFilterRule(filter, buffer, metadata = {}) {
+    try {
+      const stringMatches = this.matchFilterStrings(filter, buffer);
+      const modules = await this.createFilterModules(filter, buffer, metadata);
+      const scanFacts = createScanFacts(buffer, stringMatches, modules, {
+        entrypoint: 0,
+        filesize: buffer.length,
+        isFileSizeCapped: false,
+        maxFileSize: this.maxFileSize,
+        matchedRules: {},
+        metadata: { ruleName: filter.name },
+      });
+
+      let ast = filter.conditionAST;
+      if (!ast) {
+        try {
+          ast = this.parseSimpleCondition(filter.condition, scanFacts.strings);
+        } catch {
+          ast = { type: "boolean", value: false };
+        }
+        filter.conditionAST = ast;
+      }
+
+      return (await evaluateCondition(ast, scanFacts)) === true;
+    } catch (error) {
+      this.recordFilterError(filter.name, error);
+      return false;
+    }
+  }
+
+  matchFilterStrings(filter, buffer) {
+    const stringMatches = {};
+
+    for (const [varName, strDef] of Object.entries(filter.strings || {})) {
+      if (typeof strDef.matcher !== "function") {
+        stringMatches[varName] = [];
+        continue;
+      }
+
+      try {
+        const matches = strDef.matcher(buffer, -1);
+        stringMatches[varName] = Array.isArray(matches) ? matches : [];
+      } catch (error) {
+        this.recordFilterError(filter.name, error);
+        stringMatches[varName] = [];
+      }
+    }
+
+    return stringMatches;
+  }
+
+  async createFilterModules(filter, buffer, metadata = {}) {
+    const modules = {
+      string: this.modules.string,
+      time: this.modules.time,
+      math: createMathModule(buffer),
+      hash: createHashModule(buffer),
+    };
+
+    const usedModules = filter.usedModules ?? [];
+    if (usedModules.length === 0) return modules;
+
+    // Custom modules are resolved by their `getName()` keyword, not their registration key.
+    const customModules = new Map();
+    for (const moduleValue of Object.values(this.modules || {})) {
+      if (typeof moduleValue?.getName === "function") {
+        customModules.set(moduleValue.getName(), moduleValue);
+      }
+    }
+
+    for (const moduleName of usedModules) {
+      if (FILTER_MODULE_BUILTINS.has(moduleName)) continue;
+
+      const moduleValue = customModules.get(moduleName);
+      if (!moduleValue) continue;
+
+      const cacheKey = `${moduleName}:${buffer.length}:${hashBytes(buffer)}`;
+      if (this.filterModuleCache.has(cacheKey)) {
+        modules[moduleName] = this.filterModuleCache.get(cacheKey);
+        continue;
+      }
+
+      if (typeof moduleValue.isLoaded === "function" && !moduleValue.isLoaded() && typeof moduleValue.load === "function") {
+        await moduleValue.load();
+      }
+
+      let moduleObject = moduleValue;
+      if (typeof moduleValue.initialize === "function" && typeof moduleValue.createModule === "function") {
+        const interimResults = await moduleValue.initialize(buffer, {
+          ...(metadata || {}),
+          filesize: buffer.length,
+          hasPE: false,
+          hasELF: false,
+          timestamp: Date.now(),
+        });
+        moduleObject = moduleValue.createModule(interimResults);
+      }
+
+      this.filterModuleCache.set(cacheKey, moduleObject);
+      modules[moduleName] = moduleObject;
+    }
+
+    return modules;
+  }
+
+  recordFilterError(filterName, error) {
+    const diagnostics = this.ensureFilterScanDiagnostics();
+    const message = error?.message ?? String(error);
+    const key = `${filterName}:${message}`;
+    if (diagnostics.errors.has(key)) return;
+
+    diagnostics.errors.set(key, {
+      code: "filter-error",
+      severity: "warning",
+      message: `Filter rule "${filterName}" failed and was treated as not rejecting: ${message}`,
+      filter: filterName,
+    });
+  }
+
+  attachResultDiagnostics(results) {
+    const diagnostics = [...this.filterDiagnostics];
+
+    if (this.filterScanDiagnostics) {
+      diagnostics.push(...this.filterScanDiagnostics.errors.values());
+      diagnostics.push(...this.filterScanDiagnostics.oversized.values());
+      for (const [filterName, count] of this.filterScanDiagnostics.rejections) {
+        diagnostics.push({
+          code: "filter-rejection-count",
+          severity: "info",
+          message: `Filter rule "${filterName}" rejected ${count} candidate(s)`,
+          filter: filterName,
+        });
+      }
+    }
+
+    Object.defineProperty(results, "diagnostics", {
+      value: diagnostics,
+      enumerable: false,
+      configurable: true,
+    });
+
+    return results;
+  }
+
+  /**
+   * Evaluate named filter rules against a buffer directly.
+   *
+   * Result shape matches `scan()` (matched rules only). Unknown names are skipped silently.
+   * Custom modules are initialized from the supplied metadata, exactly as `scan()` does.
+   *
+   * @param {Uint8Array|string} data - Buffer to evaluate
+   * @param {Object} metadata - Scan metadata for custom modules
+   * @param {string[]} ruleNames - Filter rule names to evaluate
+   * @returns {Promise<Array>} Matched filter rules
+   */
+  async scanFilterRules(data, metadata = {}, ruleNames = []) {
+    if (typeof data === "string") {
+      data = new TextEncoder().encode(data);
+    }
+
+    this.resetFilterScanState();
+
+    const matchedRules = [];
+
+    for (const filterName of Array.isArray(ruleNames) ? ruleNames : []) {
+      const filter = this.filterIndex.get(filterName);
+      if (!filter) continue;
+
+      let scanFacts = null;
+      let matched = false;
+
+      try {
+        const stringMatches = this.matchFilterStrings(filter, data);
+        const modules = await this.createFilterModules(filter, data, metadata);
+        scanFacts = createScanFacts(data, stringMatches, modules, {
+          entrypoint: 0,
+          filesize: data.length,
+          isFileSizeCapped: data.length >= this.maxFileSize,
+          maxFileSize: this.maxFileSize,
+          matchedRules: {},
+          metadata: { ruleName: filter.name },
+        });
+
+        let ast = filter.conditionAST;
+        if (!ast) {
+          try {
+            ast = this.parseSimpleCondition(filter.condition, scanFacts.strings);
+          } catch {
+            ast = { type: "boolean", value: false };
+          }
+          filter.conditionAST = ast;
+        }
+
+        matched = (await evaluateCondition(ast, scanFacts)) === true;
+      } catch (error) {
+        this.recordFilterError(filter.name, error);
+        matched = false;
+      }
+
+      if (matched && scanFacts) {
+        const filteredStrings = {};
+        for (const [key, value] of Object.entries(scanFacts.strings)) {
+          // Anonymous strings surface as `.anon_N` in raw facts; drop them and private strings,
+          // matching the normal rule output shape.
+          if (key.startsWith(".") || key.startsWith("$.")) continue;
+          if (value.private || filter.strings[key]?.private) continue;
+          filteredStrings[key] = value;
+        }
+
+        matchedRules.push({
+          rule: filter.name,
+          namespace: "default",
+          tags: filter.tags || [],
+          metadata: filter.metadata || {},
+          strings: filteredStrings,
+        });
+      }
+    }
+
+    return this.attachResultDiagnostics(matchedRules);
   }
 
   /**
@@ -718,6 +1117,8 @@ export class InterceptScanner {
       data = encoder.encode(data);
     }
 
+    this.resetFilterScanState();
+
     if (!this.compiledRules || this.compiledRules.length === 0) {
       if (timingEnabled && scanTiming) {
         scanTiming.total = tracker.now() - totalStart;
@@ -726,7 +1127,7 @@ export class InterceptScanner {
       } else if (tracker) {
         tracker.clearScan();
       }
-      return [];
+      return this.attachResultDiagnostics([]);
     }
 
     // Phase 1: Fast candidate detection with Aho-Corasick
@@ -759,7 +1160,7 @@ export class InterceptScanner {
     }
 
     const buildStart = timingEnabled ? tracker.now() : 0;
-    const ruleMatches = this.buildStringMatches(verified, this.compiledRules, data);
+    const ruleMatches = await this.buildStringMatches(verified, this.compiledRules, data, metadata);
     if (timingEnabled && scanTiming) {
       tracker.accumulateStep(scanTiming.steps, "buildMatches", tracker.now() - buildStart);
     }
@@ -792,7 +1193,7 @@ export class InterceptScanner {
       tracker.clearScan();
     }
 
-    return results;
+    return this.attachResultDiagnostics(results);
   }
 
   /**
@@ -820,6 +1221,7 @@ export class InterceptScanner {
   getStats() {
     return {
       totalRules: this.compiledRules.length,
+      totalFilterRules: this.compiledFilterRules.length,
       ruleNames: this.compiledRules.map((r) => r.name),
       rulesWithStrings: this.compiledRules.filter((r) => Object.keys(r.strings).length > 0).length,
       totalStrings: this.compiledRules.reduce((sum, r) => sum + Object.keys(r.strings).length, 0),
@@ -840,8 +1242,7 @@ export class InterceptScanner {
    * Clear all loaded rules
    */
   clear() {
-    this.compiledRules = [];
-    this.ac = null;
+    this.clearRules();
     // Reset existing modules
     this.setModules(this.customModules);
   }

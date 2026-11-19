@@ -1,6 +1,6 @@
 # String Filter Rules
 
-**Status:** Draft — not implemented.
+**Status:** Implemented.
 
 ## 1. Summary
 
@@ -65,20 +65,41 @@ rule Demo {
 
 ## 4. Compilation
 
-- `parseYaraRuleGroup` recognizes a `filter` prefix before `rule` and routes declarations into a
-  separate registry (`compiledFilterRules`), keeping `compiledRules` unchanged.
+- **Two parsers over the same text, called in order:**
+  1. `parseInterceptFilterRuleGroup(text, existingFilterRules, options)` extracts `filter rule`
+     blocks and returns `{ rules, diagnostics }`.
+  2. `parseYaraRuleGroup(text, existingRules, options)` is unchanged in signature and return type;
+     it parses only normal rules and skips each `filter rule` block by tracking brace depth, not
+     by relying on the rule-start pattern failing to match.
+- `InterceptScanner.compile()` calls the filter parser first, assigns `compiledFilterRules`, then
+  calls the normal parser, then performs cross-registry validation.
+- Both parsers share identifier and brace handling, so a filter body containing the word `rule`
+  cannot be mistaken for a rule start.
 - The two registries use independent rule-id spaces so ids cannot collide.
+- `parseInterceptFilterRuleGroup` receives the scanner's shared `matchLimits` object, so filter
+  string matchers honor the same live `maxMatches` setting as normal strings.
+- The filter parser owns duplicate resolution (last one wins) and its diagnostic, since it merges
+  new declarations into `existingFilterRules` and renumbers the registry.
 - Each compiled string definition gains `reject: string[]` alongside the existing matcher metadata.
 - For each filter rule, compilation caches the parsed condition AST and the set of module roots it
   references, so neither is recomputed per candidate.
 - Filter references resolve lazily at scan time against the current filter registry, which allows
   forward references within a group and across incremental `compile()` calls.
 
-**Hard errors:** `reject(...)` inside a filter rule, `global filter rule`, a filter name colliding
-with a regular rule name, and `pe`/`elf` references inside a filter condition.
+**Hard errors:** `reject(...)` inside a filter rule, `global filter rule`, and `pe`/`elf`
+references inside a filter condition (all detected by the filter parser), plus a filter name
+colliding with a regular rule name (detected by `compile()` after both parsers run).
 
-**Diagnostics:** unknown filter names in a `reject(...)` list, and unknown module roots in a filter
-condition. Both are reported on the scan result rather than the console.
+**Accepted modifiers:** `private filter rule` is accepted; the `private` flag is ignored because
+filter rules are always private.
+
+**Condition parsing:** each filter condition is parsed at compile time. If parsing fails it falls
+back to `parseSimpleCondition`; if that also fails, a diagnostic is recorded and the filter never
+rejects.
+
+**Diagnostics:** unknown module roots and invalid filter conditions come from the filter parser;
+unknown filter names in a `reject(...)` list are resolved by `compile()` once both registries are
+current. All are reported on the scan result rather than the console.
 
 **Duplicates:** a repeated `filter rule` declaration replaces the earlier one (last one wins) and
 records a diagnostic.
@@ -119,8 +140,10 @@ rules, since normal scans exclude them.
 - `filesize` is the supplied buffer length, so conditions are naturally buffer-relative.
 - Must not touch or replace the automaton or rule-match state used by `scan()`.
 - `string`/`time`/`math`/`hash` and custom modules are available; `pe`/`elf` remain excluded.
-- Custom modules receive only the candidate buffer and the **scanner's global metadata** — never
-  per-call metadata or candidate-specific fields (offset, length, identifier).
+- Custom modules are initialized exactly as they are for normal rules, using the metadata supplied
+  to the call: when `scanFilterRules` is invoked from `scan()`, that is the metadata `scan()`
+  received. Direct callers pass their own. No candidate-specific fields (offset, length,
+  identifier) are exposed.
 
 ## 7. Diagnostics
 
@@ -136,6 +159,20 @@ Diagnostics include:
 - A single entry per scan when a candidate exceeds `MAX_FILTER_RULE_BUFFER_SIZE` and its filters
   are skipped.
 - Per-filter rejection counts for the scan.
+
+Each entry is structured:
+
+```js
+{
+  code,      // duplicate-filter-rule | unknown-filter-rule | unknown-module |
+             // invalid-filter-condition | filter-buffer-too-large | filter-error
+  severity,  // "warning" | "error" | "info"
+  message,
+  rule,      // owning rule name, when applicable
+  filter,    // filter rule name, when applicable
+  string,    // string identifier, when applicable
+}
+```
 
 An opt-in debug listing of rejected `(rule, string, offset)` tuples may be added to the same
 property.
@@ -154,8 +191,8 @@ explicit split between the flag token and trailing modifiers.
 
 ## 9. Implementation touch points
 
-- `src/yaraRuleCompiler.mjs` — `filter` rule prefix, registry split, validation, cached AST/module
-  extraction.
+- `src/yaraRuleCompiler.mjs` — new `parseInterceptFilterRuleGroup`, filter-block skipping in
+  `parseYaraRuleGroup`, filter validation, cached AST/module extraction.
 - `src/yaraStringMatch.mjs` — `reject` extraction for text, hex, and regex; regex flag/modifier
   split fix.
 - `src/interceptScanner.mjs` — `compiledFilterRules`, reject gate ahead of `buildStringMatches`,
@@ -167,10 +204,14 @@ explicit split between the flag token and trailing modifiers.
 
 | Question | Decision |
 |---|---|
+| Filter rule parsing | Separate `parseInterceptFilterRuleGroup`, called before `parseYaraRuleGroup` |
 | Unknown name in `scanFilterRules` | Silent skip |
 | `scanFilterRules` result shape | Same as `scan()` |
 | Duplicate filter declaration | Report in `diagnostics`, not on the console |
-| Custom module inputs | Candidate buffer + scanner global metadata only |
+| Metadata for custom modules | Same metadata `scan()` received; `scan()` passes it to `scanFilterRules()` |
+| Filter condition parse failure | `parseSimpleCondition` fallback, else never reject + diagnostic |
+| `private filter rule` | Accepted, `private` ignored |
+| Diagnostics entry shape | Structured `{ code, severity, message, rule, filter, string }` |
 | Candidate cap constant | `MAX_FILTER_RULE_BUFFER_SIZE` in `interceptScanner.mjs` |
 
 ## 11. Assumptions
@@ -180,5 +221,7 @@ Unless revised, these follow from the decisions above:
 1. `entrypoint` evaluates to `0` inside filter rules, since there is no file-level entry point for a
    fragment.
 2. Compile-time diagnostics persist on the scanner and are attached to each returned result until
-   the next `compile()`/`clearRules()`.
+   the next `compile()`/`clearRules()`, including scans with no matched rules.
 3. Rejection counts are per scan, not cumulative.
+4. Custom-module metadata for filter evaluation reports `filesize` as the buffer length and
+   `hasPE`/`hasELF` as `false`, matching the buffer's limited scope.

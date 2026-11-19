@@ -22,6 +22,29 @@ export const MAX_MATCHES = 100;
 const DEFAULT_MATCH_LIMITS = { maxMatches: MAX_MATCHES };
 
 /**
+ * Extract Intercept-only `reject(name, ...)` modifiers from a definition's modifier text.
+ *
+ * Names are captured verbatim: YARA identifiers are case-sensitive, so lowercasing the modifier
+ * text before extraction would break `reject(MyFilter)`.
+ */
+function extractRejectRules(modifiers) {
+  const reject = [];
+
+  if (!modifiers) return { reject, modifiers: modifiers ?? "" };
+
+  const pattern = /\breject\s*\(([^)]*)\)/gi;
+  let match;
+  while ((match = pattern.exec(modifiers)) !== null) {
+    for (const candidate of match[1].split(",")) {
+      const name = candidate.trim();
+      if (name && !reject.includes(name)) reject.push(name);
+    }
+  }
+
+  return { reject, modifiers: modifiers.replace(/\breject\s*\([^)]*\)/gi, " ") };
+}
+
+/**
  * Compile a YARA-like string definition into a matcher function.
  * Supports: text, wide, ascii, xor, base64/base64wide, regex, hex, fullword, nocase
  * @param {Object} [limits] - Shared `{ maxMatches }` object; read live on every match run
@@ -40,7 +63,8 @@ export function compileYaraLike(definition, limits = DEFAULT_MATCH_LIMITS) {
     return makeHexMatcher(definition.slice(1, definition.lastIndexOf("}")).trim(), mods, limits);
   } else if (quoteMatch) {
     const [, text, modsRaw] = quoteMatch;
-    const mods = modsRaw.toLowerCase();
+    const { reject, modifiers: modsWithoutReject } = extractRejectRules(modsRaw);
+    const mods = modsWithoutReject.toLowerCase();
 
     const opts = {
       wide: /\bwide\b/.test(mods),
@@ -53,6 +77,7 @@ export function compileYaraLike(definition, limits = DEFAULT_MATCH_LIMITS) {
       fullword: /\bfullword\b/.test(mods),
       nocase: /\bnocase\b/.test(mods),
       private: /\bprivate\b/.test(mods),
+      reject,
     };
 
     return makeTextMatcher(text, opts);
@@ -80,10 +105,15 @@ function addOptionsToMatcher(matcher) {
 // │ REGEX MATCHER               │
 // ╰─────────────────────────────╯
 function makeRegexMatcher(definition, limits) {
-  const mods = definition.split("/").pop().toLowerCase() ?? "";
-  const regexFlags = mods.split(" ")[0];
+  const lastSlash = definition.lastIndexOf("/");
+  const suffix = definition.slice(lastSlash + 1);
+  const { reject, modifiers } = extractRejectRules(suffix);
+  const mods = modifiers.toLowerCase();
+  // Flags are only valid immediately after the closing slash; space-separated words after that
+  // are modifiers. `nocase` isn't valid on a regex — YARA uses the `i` flag.
+  const regexFlags = mods.match(/^([a-z]*)/)?.[1] ?? "";
   const isPrivate = /\bprivate\b/.test(mods);
-  const pattern = definition.slice(1, definition.lastIndexOf("/"));
+  const pattern = definition.slice(1, lastSlash);
   const nocase = regexFlags.includes("i");
   const flags = "g" + (regexFlags.includes("s") ? "s" : "") + (nocase ? "i" : "");
   const literalPrefix = getRegexPrefix(pattern, nocase);
@@ -112,7 +142,7 @@ function makeRegexMatcher(definition, limits) {
     return results;
   };
 
-  return { matcher: addOptionsToMatcher(matcher), literalPrefix, type: "regex", nocase, private: isPrivate };
+  return { matcher: addOptionsToMatcher(matcher), literalPrefix, type: "regex", nocase, private: isPrivate, reject };
 }
 
 function getRegexPrefix(pattern, nocase = false) {
@@ -225,7 +255,7 @@ function makeTextMatcher(text, opts) {
     return matches;
   };
 
-  return { matcher: addOptionsToMatcher(matcher), patterns, type: "text", xor: opts.xor, nocase: opts.nocase, private: opts.private };
+  return { matcher: addOptionsToMatcher(matcher), patterns, type: "text", xor: opts.xor, nocase: opts.nocase, private: opts.private, reject: opts.reject ?? [] };
 }
 
 // ╭─────────────────────────────╮
@@ -340,12 +370,13 @@ function makeHexMatcher(hexBody, mods, limits) {
   let pattern = "";
   hexBody = hexBody?.toUpperCase().replace(/[^0-9A-F?~|()[\-\]]/g, "") || ""; // Trim invalid chars
   const parts = hexBody.match(/\[\d*(-\d*)?\]|\(.*\)|~?[0-9A-F?]{2}/g) || [];
-  const isPrivate = /\bprivate\b/.test(mods);
+  const { reject, modifiers } = extractRejectRules(mods);
+  const isPrivate = /\bprivate\b/.test(modifiers);
 
   if (parts.length === 0) {
     // Empty pattern matches nothing
     const matcher = (data) => [];
-    return { matcher, type: "hex", private: isPrivate };
+    return { matcher, type: "hex", private: isPrivate, reject };
   }
 
   for (const token of parts) {
@@ -407,7 +438,7 @@ function makeHexMatcher(hexBody, mods, limits) {
     return matches;
   };
 
-  return { matcher, type: "hex", private: isPrivate };
+  return { matcher, type: "hex", private: isPrivate, reject };
 }
 
 // function addAllOverlappingMatches(regex, text, textIndex = 0, matches = [], indexStep = 1) {

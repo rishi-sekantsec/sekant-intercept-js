@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Added Intercept-only `filter rule` declarations and the `reject(...)` string modifier, which
+  discard candidate matches before conditions are evaluated
+- Added `InterceptScanner.scanFilterRules()` for evaluating filter rules directly
+- Scan results now expose a non-enumerable `diagnostics` property
+
 ## v1.0.1
 
 - Changed default behavior for unknown strings to return false

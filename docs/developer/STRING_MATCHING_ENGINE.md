@@ -98,6 +98,47 @@ The `ahocorasickEngine.mjs` implements the Aho-Corasick algorithm:
 -   **Output**: A state machine that scans data in O(n) time, reporting when any keyword is found.
 -   **Purpose**: To drastically reduce the number of times expensive full-matchers (Regex/Hex) need to run.
 
+## Intercept Filter Rules
+
+Intercept adds a `reject(...)` string modifier backed by `filter rule` declarations. It is not
+valid YARA and is rejected by libyara.
+
+```yara
+filter rule starts_with_mal {
+  strings:
+    $m = "mal"
+  condition:
+    $m
+}
+
+rule Demo {
+  strings:
+    $a = "malware" reject(starts_with_mal)
+  condition:
+    $a
+}
+```
+
+- **Candidate-only input**: a filter rule is evaluated against the verified match bytes alone
+  (`data[offset .. offset + length]`). It cannot see the rest of the file, which bounds its cost
+  and makes it independent of file size.
+- **Verdict**: `reject(a, b)` is an OR. If any filter returns `true`, the candidate is discarded
+  before string facts are built, so `#a`, `@a`, and `$a at N` reflect surviving matches only.
+- **Size cap**: candidates longer than `MAX_FILTER_RULE_BUFFER_SIZE` (4096) keep the match and
+  skip filtering; a diagnostic is reported.
+- **Fail-open**: a filter that throws is treated as not rejecting.
+- **Facts**: `filesize` is the candidate length, offsets are buffer-relative, `entrypoint` is `0`.
+- **Modules**: `string`, `time`, `math`, `hash`, and custom modules are available. `pe`/`elf` are
+  compile errors for filter rules. Custom modules receive the candidate buffer and the scan
+  metadata; they are initialized lazily, only for filters that reference them.
+- **Registry**: filter rules live in `InterceptScanner.compiledFilterRules` and never participate
+  in normal matching, results, or Aho-Corasick.
+- **Diagnostics**: `scan()` and `scanFilterRules()` return arrays of matches with a non-enumerable
+  `diagnostics` property (duplicate definitions, unknown filter names/modules, oversized
+  candidates, filter errors, rejection counts).
+- **API**: `scanFilterRules(data, metadata, ruleNames)` evaluates filter rules directly and
+  returns the same result shape as `scan()`.
+
 ## Key Assumptions
 
 1.  **Prefix Extraction**: The performance of the scanner relies heavily on the ability to extract long, unique prefixes from Regex or Hex strings. Patterns like `/.*bad/` will suffer performance penalties.

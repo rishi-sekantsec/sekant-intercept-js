@@ -35,5 +35,20 @@ This engine uses JavaScript's native `RegExp` for regular expression matching.
   - This enables support for non-blocking Web Crypto APIs and prevents freezing the main thread during heavy scans.
 - **Speed**: Pure JS memory scanning is generally slower (~2-10x) than native C implementations, so performance-sensitive workflows should account for this.
 
+## 6. Intercept-Only Extensions
+
+The engine accepts syntax that standard YARA rejects. Rules using these constructs are not
+portable to libyara.
+
+- **`filter rule` declarations** define reusable candidate predicates. They are compiled into a
+  separate registry (`compiledFilterRules`) and never participate in normal scanning.
+- **`reject(name, ...)` string modifier** discards a verified match when any referenced filter rule
+  returns `true`. Filters see only the candidate bytes (capped at 4096), so `filesize` inside a
+  filter is the candidate length, not the file length.
+- **Diagnostics** are attached to scan results as a non-enumerable `diagnostics` property rather
+  than logged to the console.
+
+See [STRING_FILTER_RULES.md](../design/STRING_FILTER_RULES.md) for the full specification.
+
 ---
-**Last Updated:** 2026-02-11
+**Last Updated:** 2026-11-20

@@ -145,5 +145,27 @@ There is a known divergence in operator precedence between this engine and stand
 ### 6. Modules
 Only the standard modules listed in [MODULES_SUPPORT.md](MODULES_SUPPORT.md) are available. Custom modules or C-based plugins are not supported.
 
+### 7. Intercept-Only Syntax
+The following constructs are accepted by Intercept but are syntax errors in standard YARA:
+
+```yara
+filter rule is_small {
+    condition:
+        filesize <= 4
+}
+
+rule Demo {
+    strings:
+        $a = "EVIL" reject(is_small)
+    condition:
+        $a
+}
+```
+
+- `filter rule <name> { ... }` declarations.
+- `reject(<filter name>, ...)` on text, hex, and regex strings. Names are case-sensitive.
+
+See [STRING_FILTER_RULES.md](../design/STRING_FILTER_RULES.md) for semantics.
+
 ---
-**Last Updated:** 2026-02-11
+**Last Updated:** 2026-11-20
