@@ -100,8 +100,8 @@ The `ahocorasickEngine.mjs` implements the Aho-Corasick algorithm:
 
 ## Intercept Filter Rules
 
-Intercept adds a `reject(...)` string modifier backed by `filter rule` declarations. It is not
-valid YARA and is rejected by libyara.
+Intercept adds `reject(...)` and `rejectRECapture(...)` string modifiers backed by `filter rule`
+declarations. Neither is valid YARA; both are rejected by libyara.
 
 ```yara
 filter rule starts_with_mal {
@@ -114,18 +114,24 @@ filter rule starts_with_mal {
 rule Demo {
   strings:
     $a = "malware" reject(starts_with_mal)
+    $b = /dl\/([a-z0-9]+)/ rejectRECapture(starts_with_mal)
   condition:
-    $a
+    any of them
 }
 ```
 
 - **Candidate-only input**: a filter rule is evaluated against the verified match bytes alone
   (`data[offset .. offset + length]`). It cannot see the rest of the file, which bounds its cost
   and makes it independent of file size.
-- **Verdict**: `reject(a, b)` is an OR. If any filter returns `true`, the candidate is discarded
-  before string facts are built, so `#a`, `@a`, and `$a at N` reflect surviving matches only.
-- **Size cap**: candidates longer than `MAX_FILTER_RULE_BUFFER_SIZE` (4096) keep the match and
-  skip filtering; a diagnostic is reported.
+- **Capture input**: `rejectRECapture(...)` hands the filter capture group 1 instead of the full
+  match. If the pattern has no group, or group 1 is empty or did not participate, the full match is
+  used. Text and hex strings therefore always pass the full match. Only group 1 is considered.
+- **Verdict**: `reject(a, b)` and `rejectRECapture(a, b)` are each an OR. If any filter returns
+  `true`, the candidate is discarded before string facts are built, so `#a`, `@a`, and `$a at N`
+  reflect surviving matches only.
+- **Size cap**: matches longer than `MAX_FILTER_RULE_BUFFER_SIZE` (4096) keep the match and skip
+  filtering; a diagnostic is reported. The cap applies to the match length, so a capture is always
+  within it.
 - **Fail-open**: a filter that throws is treated as not rejecting.
 - **Facts**: `filesize` is the candidate length, offsets are buffer-relative, `entrypoint` is `0`.
 - **Modules**: `string`, `time`, `math`, `hash`, and custom modules are available. `pe`/`elf` are

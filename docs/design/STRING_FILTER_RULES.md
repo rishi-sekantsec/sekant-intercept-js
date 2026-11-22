@@ -6,10 +6,11 @@
 
 An Intercept-only extension that discards verified string matches before rule conditions are
 evaluated. Filtering logic lives in `filter rule` declarations, which are compiled separately and
-never participate in normal scanning, and is applied through a `reject(...)` string modifier.
+never participate in normal scanning, and is applied through `reject(...)` and
+`rejectRECapture(...)` string modifiers.
 
 Compatibility is one-way: every existing YARA rule continues to work unchanged, while rules using
-`filter rule` or `reject(...)` are compile errors in libyara.
+`filter rule`, `reject(...)`, or `rejectRECapture(...)` are compile errors in libyara.
 
 ## 2. Syntax
 
@@ -31,26 +32,30 @@ rule Demo {
     $a = "malware" ascii nocase reject(short_pe_match, is_high_entropy)
     $b = { 4D 5A ?? ?? } reject(short_pe_match)
     $c = /dropper[0-9]+/ reject(short_pe_match)
+    $d = /download\/([A-Za-z0-9_.-]+)/ rejectRECapture(is_high_entropy)
   condition:
-    $a or $b or $c
+    any of them
 }
 ```
 
 - Filter names are unquoted identifiers, parenthesized, and **case-sensitive** (matching YARA's
   identifier rules).
-- `reject(...)` is supported on text, hex, and regex strings.
-- Repeated `reject(...)` modifiers are allowed and union their lists.
-- An empty `reject()` is a no-op.
+- `reject(...)` and `rejectRECapture(...)` are supported on text, hex, and regex strings, and may
+  appear together on one string.
+- Repeated modifiers of either form are allowed and union their own lists.
+- An empty `reject()` or `rejectRECapture()` is a no-op.
 - `meta:` and `tags:` on filter rules are parsed and ignored.
 - Filter rules are always private: they never appear in scan results, `matchedRules`, or rule
   statistics.
 
 ## 3. Semantics
 
-- **Input:** the exact bytes of the verified match (`data[offset .. offset + length]`). Nothing
-  before or after the match is visible.
-- **Verdict:** `reject(a, b, ...)` is an OR — if any listed filter returns `true`, the candidate is
-  discarded. Evaluation short-circuits on the first `true`.
+- **Input:** the exact bytes of the verified match (`data[offset .. offset + length]`), or of
+  capture group 1 for `rejectRECapture(...)` (see below). Nothing before or after the buffer is
+  visible.
+- **Verdict:** `reject(a, b, ...)` and `rejectRECapture(a, b, ...)` are each an OR — if any listed
+  filter returns `true`, the candidate is discarded. Evaluation short-circuits on the first `true`,
+  in list order (`reject` first, then `rejectRECapture`).
 - **Size bound:** candidates longer than `MAX_FILTER_RULE_BUFFER_SIZE` (4096, exported from
   `interceptScanner.mjs`) are kept without running any filter (reject is treated as `false`). No
   truncation.
@@ -60,8 +65,47 @@ rule Demo {
   buffer, and `entrypoint` is `0`.
 - **Modules:** `string`, `time`, `math`, `hash`, and registered custom modules are available.
   `pe` and `elf` are rejected at compile time because a fragment cannot be parsed meaningfully.
-- **Nesting:** filter rules cannot use `reject(...)`; a filter rule cannot reference another
-  filter rule or a regular rule in its condition.
+- **Nesting:** filter rules cannot use `reject(...)` or `rejectRECapture(...)`; a filter rule
+  cannot reference another filter rule or a regular rule in its condition.
+
+### Capture-based filters
+
+`rejectRECapture(names...)` behaves exactly like `reject(names...)` except for the buffer handed to
+the filter:
+
+| String type | Filter receives |
+|---|---|
+| Regex, group 1 exists and is non-empty | the bytes of **capture group 1** |
+| Regex with no capture group | the full match |
+| Regex where group 1 did not participate (e.g. `/a|(b)/` matching `a`) | the full match |
+| Regex where group 1 is empty (e.g. `/a(.*)b/` matching `ab`) | the full match |
+| Text, hex, wide, xor, base64 | the full match |
+
+Only group 1 is used; additional and named groups are ignored. The 4096-byte cap applies to the
+match length, so a capture is always within the cap. All other semantics — OR across names,
+short-circuiting, fail-open, caching, diagnostics, buffer-relative facts — are unchanged, and the
+capture buffer is cached separately from a full-match buffer.
+
+```yara
+filter rule no_extension {
+  strings:
+    $dot = "."
+  condition:
+    not $dot
+}
+
+rule Download {
+  strings:
+    $url = /download\/([A-Za-z0-9_-]+)/ rejectRECapture(no_extension)
+  condition:
+    $url
+}
+```
+
+Here the filter sees only the captured file name, so `$dot` tests the name rather than the URL.
+
+The capture value is derived from the decoded match text using the same conversion the matcher
+already uses for reported match lengths. It is not exposed in scan results.
 
 ## 4. Compilation
 
@@ -213,6 +257,9 @@ explicit split between the flag token and trailing modifiers.
 | `private filter rule` | Accepted, `private` ignored |
 | Diagnostics entry shape | Structured `{ code, severity, message, rule, filter, string }` |
 | Candidate cap constant | `MAX_FILTER_RULE_BUFFER_SIZE` in `interceptScanner.mjs` |
+| `rejectRECapture` group selection | Group 1 only; named and later groups ignored |
+| Missing/empty/non-participating group | Fall back to the full match |
+| String types for `rejectRECapture` | All three; text and hex always fall back |
 
 ## 11. Assumptions
 

@@ -377,8 +377,10 @@ function parseFilterRule(ruleText, options = {}) {
   const strings = parseStrings(ruleBody, options);
 
   for (const [varName, strDef] of Object.entries(strings)) {
-    if (strDef.reject?.length) {
-      throw new Error(`Invalid Intercept filter rule "${name}": reject(...) is not allowed on string ${varName}`);
+    if (strDef.reject?.length || strDef.rejectCapture?.length) {
+      throw new Error(
+        `Invalid Intercept filter rule "${name}": reject(...) and rejectRECapture(...) are not allowed on string ${varName}`
+      );
     }
   }
 

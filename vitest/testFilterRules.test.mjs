@@ -95,6 +95,40 @@ await test('1.7 hex and regex modifiers compose with reject', () => {
   assertTrue(regex.matcher(new TextEncoder().encode('a\nb'), -1).length > 0, 's flag should still apply');
 });
 
+await test('1.8 rejectRECapture is extracted for all three string types', () => {
+  assertEquals(compileYaraLike('"abc" rejectRECapture(cap)').rejectCapture.join(','), 'cap');
+  assertEquals(compileYaraLike('{ 41 42 } rejectRECapture(cap)').rejectCapture.join(','), 'cap');
+  assertEquals(compileYaraLike('/ab(c)/ rejectRECapture(cap)').rejectCapture.join(','), 'cap');
+  assertEquals(compileYaraLike('"abc" rejectRECapture(cap)').reject.length, 0);
+});
+
+await test('1.9 reject and rejectRECapture stay in their own lists on one string', () => {
+  const compiled = compileYaraLike('/ab(c)/ reject(full) rejectRECapture(cap)');
+  assertEquals(compiled.reject.join(','), 'full');
+  assertEquals(compiled.rejectCapture.join(','), 'cap');
+  assertTrue(compiled.reject.length > 0, 'plain reject must not be swallowed by the capture variant');
+});
+
+await test('1.10 rejectRECapture accepts whitespace, uppercase, and repeated/empty forms', () => {
+  assertEquals(compileYaraLike('"abc" rejectRECapture ( a , b )').rejectCapture.join(','), 'a,b');
+  assertEquals(compileYaraLike('"abc" REJECTRECAPTURE(MyFilter)').rejectCapture.join(','), 'MyFilter');
+  assertEquals(compileYaraLike('"abc" rejectRECapture()').rejectCapture.length, 0);
+  assertEquals(
+    compileYaraLike('"abc" rejectRECapture(a) rejectRECapture(a, b)').rejectCapture.join(','),
+    'a,b'
+  );
+});
+
+await test('1.11 rejectRECapture does not disturb regex flags or other modifiers', () => {
+  const compiled = compileYaraLike('/ab(c)/i rejectRECapture(cap)');
+  assertTrue(compiled.nocase, 'i flag should survive capture extraction');
+  assertTrue(compileYaraLike('/ab(c)/rejectRECapture(cap)').nocase === false, 'no stray flag');
+  assertTrue(
+    compileYaraLike('"abc" nocase rejectRECapture(cap)').nocase,
+    'text modifiers should survive capture extraction'
+  );
+});
+
 // ═════════════════════════════════════════════════════════════════════════
 // Section 2: Filtering behavior
 // ═════════════════════════════════════════════════════════════════════════
@@ -483,6 +517,101 @@ await test('2.18 filter rule strings may be hex or regex', async () => {
   assertArrayLength(await scanner.scan(new Uint8Array([0x4d, 0x5a, 0x64, 0x72, 0x31])), 0);
 });
 
+// ── rejectRECapture buffer selection ─────────────────────────────────────
+
+const scanCapture = async (filterCondition, stringDefinition, data) => {
+  const scanner = new InterceptScanner();
+  scanner.compile(`
+    filter rule probe {
+      condition:
+        ${filterCondition}
+    }
+    rule R {
+      strings:
+        ${stringDefinition}
+      condition:
+        any of them
+    }
+  `);
+  return scanner.scan(data);
+};
+
+await test('2.19 rejectRECapture passes capture group 1, not the full match', async () => {
+  // group 1 is "cde" (3 bytes), the full match is "abcdef" (6)
+  assertArrayLength(await scanCapture('filesize == 3', '$a = /ab(cde)f/ rejectRECapture(probe)', 'abcdef'), 0);
+  assertArrayLength(await scanCapture('filesize == 6', '$a = /ab(cde)f/ rejectRECapture(probe)', 'abcdef'), 1);
+});
+
+await test('2.20 rejectRECapture uses only the first capture group', async () => {
+  assertArrayLength(await scanCapture('filesize == 3', '$a = /ab(cde)(fg)/ rejectRECapture(probe)', 'abcdefg'), 0);
+  assertArrayLength(await scanCapture('filesize == 2', '$a = /ab(cde)(fg)/ rejectRECapture(probe)', 'abcdefg'), 1);
+});
+
+await test('2.21 rejectRECapture falls back to the full match when there is no group', async () => {
+  assertArrayLength(await scanCapture('filesize == 6', '$a = /abcdef/ rejectRECapture(probe)', 'abcdef'), 0);
+  assertArrayLength(await scanCapture('filesize == 3', '$a = /abcdef/ rejectRECapture(probe)', 'abcdef'), 1);
+});
+
+await test('2.22 rejectRECapture falls back when group 1 did not participate', async () => {
+  // "abc" matches via the second alternative, so group 1 is undefined
+  assertArrayLength(await scanCapture('filesize == 3', '$a = /(?:x)|(abc)/ rejectRECapture(probe)', 'abc'), 0);
+});
+
+await test('2.23 rejectRECapture falls back when group 1 is empty', async () => {
+  assertArrayLength(await scanCapture('filesize == 3', '$a = /ab(.*)f/ rejectRECapture(probe)', 'abf'), 0);
+});
+
+await test('2.24 text and hex strings fall back to the full match', async () => {
+  assertArrayLength(await scanCapture('filesize == 3', '$a = "abc" rejectRECapture(probe)', 'abc'), 0);
+  assertArrayLength(
+    await scanCapture('filesize == 3', '$a = { 61 62 63 } rejectRECapture(probe)', new Uint8Array([0x61, 0x62, 0x63])),
+    0
+  );
+});
+
+await test('2.25 reject and rejectRECapture receive different buffers on one string', async () => {
+  // full match is 6 bytes, capture is 3; the rule matches when either string survives
+  const scanner = new InterceptScanner();
+  scanner.compile(`
+    filter rule only_full {
+      condition:
+        filesize == 6
+    }
+    rule R {
+      strings:
+        $full = /ab(cde)f/ reject(only_full)
+        $cap = /ab(cde)f/ rejectRECapture(only_full)
+      condition:
+        any of them
+    }
+  `);
+
+  const results = await scanner.scan('abcdef');
+  assertArrayLength(results, 1);
+  assertEquals(results[0].strings.$cap?.matched, true, 'capture string should survive');
+  assertEquals(results[0].strings.$full, undefined, 'full-match string should be rejected');
+});
+
+await test('2.26 rejectRECapture works with the i flag and multibyte captures', async () => {
+  assertArrayLength(await scanCapture('filesize == 3', '$a = /AB(cde)F/i rejectRECapture(probe)', 'abcdef'), 0);
+
+  const scanner = new InterceptScanner();
+  scanner.compile(`
+    filter rule one_char {
+      condition:
+        filesize == 4
+    }
+    rule R {
+      strings:
+        $a = /x(.+)y/ rejectRECapture(one_char)
+      condition:
+        $a
+    }
+  `);
+  // "😀" is 4 UTF-8 bytes
+  assertArrayLength(await scanner.scan('x😀y'), 0);
+});
+
 // ═════════════════════════════════════════════════════════════════════════
 // Section 3: Boundaries, fail-open, and module resolution
 // ═════════════════════════════════════════════════════════════════════════
@@ -718,6 +847,37 @@ await test('4.5 a filter condition referencing a rule is a compile error', () =>
         Other
     }
   `));
+});
+
+await test('4.5b rejectRECapture inside a filter rule is a compile error', () => {
+  assertThrows(compileError(`
+    filter rule nested {
+      strings:
+        $a = /x(y)/ rejectRECapture(other)
+      condition:
+        $a
+    }
+  `));
+});
+
+await test('4.5c unknown names in rejectRECapture are diagnosed', async () => {
+  const scanner = new InterceptScanner();
+  scanner.compile(`
+    rule R {
+      strings:
+        $a = /ab(c)/ rejectRECapture(missing_capture_filter)
+      condition:
+        $a
+    }
+  `);
+
+  const results = await scanner.scan('abc');
+  assertTrue(
+    results.diagnostics.some(
+      (entry) => entry.code === 'unknown-filter-rule' && entry.filter === 'missing_capture_filter'
+    )
+  );
+  assertArrayLength(results, 1, 'unknown names must not reject');
 });
 
 await test('4.6 private filter rule is accepted and private is ignored', async () => {
@@ -1107,6 +1267,24 @@ await test('6.1 identical candidates share one filter verdict and one module ini
   assertEquals(moduleInstance.initializeLengths.filter((length) => length === 7).length, 1);
 });
 
+await test('5.9 capture stays out of the serialized result shape', async () => {
+  const scanner = new InterceptScanner();
+  scanner.compile(`${NEVER}
+    rule R {
+      strings:
+        $a = /ab(cde)f/ rejectRECapture(never)
+      condition:
+        $a
+    }
+  `);
+
+  const results = await scanner.scan('abcdef');
+  assertArrayLength(results, 1);
+  assertEquals(Object.keys(results[0].strings.$a.matches[0]).join(','), 'offset,length');
+  assertEquals(JSON.stringify(results).includes('capture'), false);
+  assertEquals(JSON.stringify(results).includes('cde'), false);
+});
+
 await test('6.2 filter verdicts do not leak across scans', async () => {
   class MarkerModule extends BaseCustomModule {
     constructor() {
@@ -1138,6 +1316,29 @@ await test('6.2 filter verdicts do not leak across scans', async () => {
 
   assertArrayLength(await scanner.scan('abc', { enabled: true }), 0);
   assertArrayLength(await scanner.scan('abc', { enabled: false }), 1);
+});
+
+await test('6.4 verdict cache separates capture buffers from full-match buffers', async () => {
+  // Same filter name, same file. $full is rejected on its 6-byte match; $cap must be evaluated on
+  // its 3-byte capture instead of reusing that verdict.
+  const scanner = new InterceptScanner();
+  scanner.compile(`
+    filter rule six_bytes {
+      condition:
+        filesize == 6
+    }
+    rule R {
+      strings:
+        $full = /ab(cde)f/ reject(six_bytes)
+        $cap = /ab(cde)f/ rejectRECapture(six_bytes)
+      condition:
+        any of them
+    }
+  `);
+
+  const results = await scanner.scan('abcdef');
+  assertArrayLength(results, 1);
+  assertEquals(results[0].strings.$cap?.matched, true);
 });
 
 await test('6.3 filters that reference no custom module do not initialize any', async () => {

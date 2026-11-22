@@ -22,26 +22,39 @@ export const MAX_MATCHES = 100;
 const DEFAULT_MATCH_LIMITS = { maxMatches: MAX_MATCHES };
 
 /**
- * Extract Intercept-only `reject(name, ...)` modifiers from a definition's modifier text.
+ * Extract Intercept-only `reject(name, ...)` and `rejectRECapture(name, ...)` modifiers from a
+ * definition's modifier text.
+ *
+ * Both forms are matched in one pass so each name stays bound to the buffer its modifier selects:
+ * `reject` passes the full match, `rejectRECapture` passes capture group 1 (falling back to the
+ * full match when the pattern has no participating group). The optional group is required rather
+ * than a `reject|rejectRECapture` alternation, which would match `reject` first and then fail to
+ * match the `(`.
  *
  * Names are captured verbatim: YARA identifiers are case-sensitive, so lowercasing the modifier
  * text before extraction would break `reject(MyFilter)`.
  */
 function extractRejectRules(modifiers) {
   const reject = [];
+  const rejectCapture = [];
 
-  if (!modifiers) return { reject, modifiers: modifiers ?? "" };
+  if (!modifiers) return { reject, rejectCapture, modifiers: modifiers ?? "" };
 
-  const pattern = /\breject\s*\(([^)]*)\)/gi;
+  const pattern = /\breject(RECapture)?\s*\(([^)]*)\)/gi;
   let match;
   while ((match = pattern.exec(modifiers)) !== null) {
-    for (const candidate of match[1].split(",")) {
+    const target = match[1] ? rejectCapture : reject;
+    for (const candidate of match[2].split(",")) {
       const name = candidate.trim();
-      if (name && !reject.includes(name)) reject.push(name);
+      if (name && !target.includes(name)) target.push(name);
     }
   }
 
-  return { reject, modifiers: modifiers.replace(/\breject\s*\([^)]*\)/gi, " ") };
+  return {
+    reject,
+    rejectCapture,
+    modifiers: modifiers.replace(/\breject(RECapture)?\s*\([^)]*\)/gi, " "),
+  };
 }
 
 /**
@@ -63,7 +76,7 @@ export function compileYaraLike(definition, limits = DEFAULT_MATCH_LIMITS) {
     return makeHexMatcher(definition.slice(1, definition.lastIndexOf("}")).trim(), mods, limits);
   } else if (quoteMatch) {
     const [, text, modsRaw] = quoteMatch;
-    const { reject, modifiers: modsWithoutReject } = extractRejectRules(modsRaw);
+    const { reject, rejectCapture, modifiers: modsWithoutReject } = extractRejectRules(modsRaw);
     const mods = modsWithoutReject.toLowerCase();
 
     const opts = {
@@ -78,6 +91,7 @@ export function compileYaraLike(definition, limits = DEFAULT_MATCH_LIMITS) {
       nocase: /\bnocase\b/.test(mods),
       private: /\bprivate\b/.test(mods),
       reject,
+      rejectCapture,
     };
 
     return makeTextMatcher(text, opts);
@@ -107,7 +121,8 @@ function addOptionsToMatcher(matcher) {
 function makeRegexMatcher(definition, limits) {
   const lastSlash = definition.lastIndexOf("/");
   const suffix = definition.slice(lastSlash + 1);
-  const { reject, modifiers } = extractRejectRules(suffix);
+  const { reject, rejectCapture, modifiers } = extractRejectRules(suffix);
+  const wantsCapture = rejectCapture.length > 0;
   const mods = modifiers.toLowerCase();
   // Flags are only valid immediately after the closing slash; space-separated words after that
   // are modifiers. `nocase` isn't valid on a regex — YARA uses the `i` flag.
@@ -135,14 +150,20 @@ function makeRegexMatcher(definition, limits) {
     while ((m = re.exec(text)) !== null && results.length < limits.maxMatches) {
       if (exact && m.index !== runIndex) break; // prefix hit the regex rejects
       const byteIndex  = encoder.encode(text.slice(0, m.index)).length;
-      results.push({ offset: byteIndex + offset, length: encoder.encode(m[0]).length });
+      const entry = { offset: byteIndex + offset, length: encoder.encode(m[0]).length };
+      // Only the capture *value* is needed, never its position, so no `d` flag is required.
+      // Absent, non-participating, and empty groups all fall back to the full match.
+      if (wantsCapture && typeof m[1] === "string" && m[1] !== "") {
+        Object.defineProperty(entry, "capture", { value: m[1], enumerable: false });
+      }
+      results.push(entry);
       re.lastIndex = m.index + 1; // Move forward to find overlapping matches
       if (singleRun) break;
     }
     return results;
   };
 
-  return { matcher: addOptionsToMatcher(matcher), literalPrefix, type: "regex", nocase, private: isPrivate, reject };
+  return { matcher: addOptionsToMatcher(matcher), literalPrefix, type: "regex", nocase, private: isPrivate, reject, rejectCapture };
 }
 
 function getRegexPrefix(pattern, nocase = false) {
@@ -255,7 +276,7 @@ function makeTextMatcher(text, opts) {
     return matches;
   };
 
-  return { matcher: addOptionsToMatcher(matcher), patterns, type: "text", xor: opts.xor, nocase: opts.nocase, private: opts.private, reject: opts.reject ?? [] };
+  return { matcher: addOptionsToMatcher(matcher), patterns, type: "text", xor: opts.xor, nocase: opts.nocase, private: opts.private, reject: opts.reject ?? [], rejectCapture: opts.rejectCapture ?? [] };
 }
 
 // ╭─────────────────────────────╮
@@ -370,13 +391,13 @@ function makeHexMatcher(hexBody, mods, limits) {
   let pattern = "";
   hexBody = hexBody?.toUpperCase().replace(/[^0-9A-F?~|()[\-\]]/g, "") || ""; // Trim invalid chars
   const parts = hexBody.match(/\[\d*(-\d*)?\]|\(.*\)|~?[0-9A-F?]{2}/g) || [];
-  const { reject, modifiers } = extractRejectRules(mods);
+  const { reject, rejectCapture, modifiers } = extractRejectRules(mods);
   const isPrivate = /\bprivate\b/.test(modifiers);
 
   if (parts.length === 0) {
     // Empty pattern matches nothing
     const matcher = (data) => [];
-    return { matcher, type: "hex", private: isPrivate, reject };
+    return { matcher, type: "hex", private: isPrivate, reject, rejectCapture };
   }
 
   for (const token of parts) {
@@ -438,7 +459,7 @@ function makeHexMatcher(hexBody, mods, limits) {
     return matches;
   };
 
-  return { matcher, type: "hex", private: isPrivate, reject };
+  return { matcher, type: "hex", private: isPrivate, reject, rejectCapture };
 }
 
 // function addAllOverlappingMatches(regex, text, textIndex = 0, matches = [], indexStep = 1) {

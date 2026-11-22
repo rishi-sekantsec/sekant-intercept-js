@@ -47,6 +47,10 @@ export const MAX_FILTER_RULE_BUFFER_SIZE = 4096;
 
 const FILTER_MODULE_BUILTINS = new Set(["string", "time", "math", "hash"]);
 
+function hasRejectFilters(strDef) {
+  return Boolean(strDef?.reject?.length || strDef?.rejectCapture?.length);
+}
+
 function hashBytes(bytes) {
   let hash = 0x811c9dc5;
   for (let i = 0; i < bytes.length; i++) {
@@ -319,7 +323,7 @@ export class InterceptScanner {
       const strDef = ownerRule?.strings?.[candidate.varName];
 
       if (candidate.matches && candidate.matches.length > 0) {
-        const keptMatches = strDef?.reject?.length
+        const keptMatches = hasRejectFilters(strDef)
           ? await this.filterMatches(strDef, candidate.matches, data, metadata, {
               ruleName: ownerRule?.name,
               varName: candidate.varName,
@@ -372,7 +376,7 @@ export class InterceptScanner {
 
         // Run full matcher over entire data (-1 means find ALL matches, not verify at offset 0)
         let matches = strDef.type === "hex" && dataAsHexString !== null ? strDef.matcher(dataAsHexString, -1) : strDef.matcher(data, -1);
-        if (strDef.reject?.length && matches && matches.length > 0) {
+        if (hasRejectFilters(strDef) && matches && matches.length > 0) {
           matches = await this.filterMatches(strDef, matches, data, metadata, { ruleName: rule.name, varName });
         }
         if (matches && matches.length > 0) {
@@ -410,7 +414,7 @@ export class InterceptScanner {
     const filterNames = new Set(this.compiledFilterRules.map((filter) => filter.name));
     for (const rule of this.compiledRules) {
       for (const [varName, strDef] of Object.entries(rule.strings || {})) {
-        for (const filterName of strDef.reject ?? []) {
+        for (const filterName of [...(strDef.reject ?? []), ...(strDef.rejectCapture ?? [])]) {
           if (!filterNames.has(filterName)) {
             this.filterDiagnostics.push({
               code: "unknown-filter-rule",
@@ -458,7 +462,7 @@ export class InterceptScanner {
   }
 
   async filterMatches(strDef, matches, data, metadata, context = {}) {
-    if (!strDef || !Array.isArray(strDef.reject) || strDef.reject.length === 0) return matches;
+    if (!hasRejectFilters(strDef)) return matches;
 
     const kept = [];
     for (const match of matches) {
@@ -469,8 +473,11 @@ export class InterceptScanner {
   }
 
   async isRejectedMatch(strDef, match, data, metadata, { ruleName, varName } = {}) {
-    const filterNames = strDef?.reject;
-    if (!Array.isArray(filterNames) || filterNames.length === 0) return false;
+    const entries = [
+      ...(strDef?.reject ?? []).map((name) => ({ name, capture: false })),
+      ...(strDef?.rejectCapture ?? []).map((name) => ({ name, capture: true })),
+    ];
+    if (entries.length === 0) return false;
 
     const length = match?.length ?? 0;
     if (length <= 0) return false;
@@ -491,11 +498,17 @@ export class InterceptScanner {
       return false;
     }
 
-    const buffer = data.subarray(match.offset, match.offset + length);
+    const fullBuffer = data.subarray(match.offset, match.offset + length);
 
-    for (const filterName of filterNames) {
+    for (const { name: filterName, capture } of entries) {
       const filter = this.filterIndex.get(filterName);
       if (!filter) continue; // Unknown names are ignored (diagnosed at compile time)
+
+      // `rejectRECapture` passes capture group 1 when the pattern has a participating, non-empty
+      // group; every other case falls back to the full match.
+      const buffer = capture && typeof match.capture === "string"
+        ? new TextEncoder().encode(match.capture)
+        : fullBuffer;
 
       if (await this.getFilterDecision(filter, buffer, metadata)) {
         diagnostics.rejections.set(filterName, (diagnostics.rejections.get(filterName) ?? 0) + 1);

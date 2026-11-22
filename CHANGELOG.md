@@ -4,6 +4,8 @@
 
 - Added Intercept-only `filter rule` declarations and the `reject(...)` string modifier, which
   discard candidate matches before conditions are evaluated
+- Added `rejectRECapture(...)`, which hands the filter capture group 1 of a regex match (falling
+  back to the full match) instead of the whole match
 - Added `InterceptScanner.scanFilterRules()` for evaluating filter rules directly
 - Scan results now expose a non-enumerable `diagnostics` property
 

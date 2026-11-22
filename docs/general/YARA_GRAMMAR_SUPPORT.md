@@ -157,13 +157,17 @@ filter rule is_small {
 rule Demo {
     strings:
         $a = "EVIL" reject(is_small)
+        $b = /evil\/([a-z]+)/ rejectRECapture(is_small)
     condition:
-        $a
+        $a or $b
 }
 ```
 
 - `filter rule <name> { ... }` declarations.
 - `reject(<filter name>, ...)` on text, hex, and regex strings. Names are case-sensitive.
+- `rejectRECapture(<filter name>, ...)` — same as `reject`, but the filter receives capture
+  group 1 of a regex match, falling back to the full match when no group exists, group 1 is empty,
+  or group 1 did not participate. Text and hex strings always pass the full match.
 
 See [STRING_FILTER_RULES.md](../design/STRING_FILTER_RULES.md) for semantics.
 
