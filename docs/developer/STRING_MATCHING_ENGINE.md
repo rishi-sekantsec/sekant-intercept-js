@@ -77,6 +77,9 @@ with its value and byte position:
 - Positions need the ES2022 `d` (hasIndices) flag, added internally from the option. It never
   appears in rule text, and a user-written `d` is ignored because rule flags are limited to `s` and
   `i`. Without `d` support, values are still reported and positions fall back to `null`.
+- `d` reports UTF-16 indices, so a char->byte table is built once per matcher run — from the second
+  match onward — keeping a many-match scan linear. The single-match verification path never builds
+  it, so per-candidate filtering pays nothing.
 
 ## Intercept Filter Rules
 

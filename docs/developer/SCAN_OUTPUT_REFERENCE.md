@@ -107,8 +107,11 @@ matches: [
     from the option and never appears in rule text — a user-written `d` in `/…/d` is ignored, since
     rule flags are limited to `s` and `i`. If a runtime lacks it, `value` is still reported and
     `offset`/`length` are `null`.
--   **Cost**: roughly 1.25x on a scan dominated by many regex matches; verification of individual
-    candidates is unaffected.
+-   **Cost**: V8 allocates the `indices` structure per match, which is the bulk of the overhead —
+    roughly 1.2x on a scan dominated by many regex matches. Converting UTF-16 indices to byte
+    offsets uses a table built once per matcher run (from the second match onward), so a
+    many-match scan stays linear in the buffer; the single-match verification path never builds
+    it and is unaffected.
 
 ## Usage Example
 

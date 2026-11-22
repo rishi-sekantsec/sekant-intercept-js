@@ -69,6 +69,25 @@ const SUPPORTS_INDICES = (() => {
   }
 })();
 
+/** Byte offset of every UTF-16 index in `text`; lets positions stay O(1) once built. */
+function buildByteOffsets(text) {
+  const byteOf = new Uint32Array(text.length + 1);
+  let bytes = 0;
+
+  for (let i = 0; i < text.length; i++) {
+    byteOf[i] = bytes;
+    const codePoint = text.codePointAt(i);
+    bytes += codePoint < 0x80 ? 1 : codePoint < 0x800 ? 2 : codePoint < 0x10000 ? 3 : 4;
+    if (codePoint > 0xffff) {
+      byteOf[i + 1] = bytes;
+      i += 1;
+    }
+  }
+
+  byteOf[text.length] = bytes;
+  return byteOf;
+}
+
 /**
  * Name of the first capture group, so the numbered entry can carry the name JS exposes only through
  * `match.groups`. Scans the pattern once, skipping escapes, character classes, and non-capturing
@@ -193,6 +212,15 @@ function makeRegexMatcher(definition, limits, options = {}) {
   const matcher = (data, offset = -1, exactIndex = -1) => {
     const encoder = new TextEncoder();
     const text = new TextDecoder().decode(data);
+    // Positions are byte offsets, but `d` reports UTF-16 indices. A shared table makes that O(1),
+    // yet costs O(buffer) to build, so it is built only from the second match onward: the
+    // one-match verification path never pays for it, and a many-match scan builds it once instead
+    // of encoding a prefix per match (which was quadratic).
+    let byteOf = null;
+    let matchCount = 0;
+    const byteAt = (charIndex) =>
+      byteOf ? byteOf[charIndex] : encoder.encode(text.slice(0, charIndex)).length;
+
     const results = [];
     const singleRun = offset >= 0;
     const exact = exactIndex >= 0;
@@ -205,8 +233,16 @@ function makeRegexMatcher(definition, limits, options = {}) {
     let m;
     while ((m = re.exec(text)) !== null && results.length < limits.maxMatches) {
       if (exact && m.index !== runIndex) break; // prefix hit the regex rejects
-      const byteIndex = encoder.encode(text.slice(0, m.index)).length;
-      const entry = { offset: byteIndex + offset, length: encoder.encode(m[0]).length };
+      if (wantsIndices && matchCount === 1) byteOf = buildByteOffsets(text);
+      matchCount += 1;
+
+      const byteIndex = wantsIndices
+        ? byteAt(m.index)
+        : encoder.encode(text.slice(0, m.index)).length;
+      const matchLength = wantsIndices
+        ? byteAt(m.index + m[0].length) - byteIndex
+        : encoder.encode(m[0]).length;
+      const entry = { offset: byteIndex + offset, length: matchLength };
       // The reject gate needs only the capture *value*, so no indices flag is involved. Absent,
       // non-participating, and empty groups all fall back to the full match.
       if (wantsCapture && typeof m[1] === "string" && m[1] !== "") {
@@ -223,14 +259,9 @@ function makeRegexMatcher(definition, limits, options = {}) {
 
           const span = wantsIndices ? m.indices?.[1] : null;
           if (span) {
-            // Positions are derived from the match start so the work stays inside the match span;
-            // a capture earlier than the match (lookbehind) falls back to a prefix encode.
-            const startByte =
-              span[0] >= m.index
-                ? byteIndex + encoder.encode(text.slice(m.index, span[0])).length
-                : encoder.encode(text.slice(0, span[0])).length;
+            const startByte = byteAt(span[0]);
             capture.offset = startByte + offset;
-            capture.length = encoder.encode(text.slice(span[0], span[1])).length;
+            capture.length = byteAt(span[1]) - startByte;
           } else {
             capture.offset = null;
             capture.length = null;
