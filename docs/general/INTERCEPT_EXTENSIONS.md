@@ -10,7 +10,7 @@ not run in libyara.**
 | `reject(...)` | String modifier | Discard a match when a filter rule returns `true` |
 | `rejectRECapture(...)` | String modifier | Same, but the filter sees capture group 1 |
 | `$_` | Condition placeholder | The whole buffer as text |
-| `includeCaptures` | Scanner option | Capture-group offsets on regex matches |
+| `includeCaptures` | Scanner option | Capture group 1 value on regex matches |
 
 Implementation notes live in [STRING_FILTER_RULES.md](../design/STRING_FILTER_RULES.md) and
 [STRING_MATCHING_ENGINE.md](../developer/STRING_MATCHING_ENGINE.md).
@@ -157,21 +157,25 @@ The placeholder is resolved at parse time and never enters the string set, so `t
 
 ---
 
-## 5. Capture group offsets
+## 5. Capture group values
 
-`new InterceptScanner({ includeCaptures: true })` adds a `captures` array to every regex match:
+`new InterceptScanner({ includeCaptures: true })` adds a `captures` array to every regex match,
+holding capture group 1 — the same group `rejectRECapture(...)` passes to filter rules:
 
 ```javascript
-{ offset: 0, length: 9, captures: [{ index: 1, name: 'user', offset: 3, length: 3 }] }
+{ offset: 0, length: 9, captures: [{ index: 1, name: 'user', value: 'abc' }] }
 ```
 
-Group indices are 1-based, offsets are absolute bytes so they can slice the scanned buffer, names
-are attached to numbered entries, and non-participating groups report `null`. Values are not
-included. The option is off by default because `YR_MATCH` carries no capture information, keeping
-the default output YARA-shaped. The `d` flag it relies on is applied internally and never appears in
-rule text.
+Only group 1 is kept, so the remaining groups' strings are collectable immediately, and entries carry
+no position data — slice the scanned buffer with the match's own `offset`/`length` if you need
+bytes. `name` appears only for a named group 1, non-participating group 1 reports `value: null`, an
+empty group reports `""`, and a pattern without groups yields `[]`.
 
-## 5. Other Intercept-only details
+No `d` flag is involved: `exec` already materializes every group, so reading group 1 back is free.
+The option is off by default because `YR_MATCH` carries no capture information, keeping default
+output YARA-shaped.
+
+## 6. Other Intercept-only details
 
 Minor extensions that are documented where they are implemented:
 
@@ -181,7 +185,7 @@ Minor extensions that are documented where they are implemented:
 - Modules are available without `import`; `import` statements are validated but optional. See
   [ENGINE_DIFFERENCES.md](ENGINE_DIFFERENCES.md).
 
-## 6. Compatibility summary
+## 7. Compatibility summary
 
 | Construct | libyara | Intercept |
 |---|---|---|

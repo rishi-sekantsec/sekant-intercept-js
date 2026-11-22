@@ -58,6 +58,25 @@ All matcher objects share this interface:
 }
 ```
 
+### Capture Group Values
+
+Constructing the scanner with `includeCaptures: true` adds a `captures` array to every regex match
+object, holding **capture group 1** — the same group `rejectRECapture(...)` passes to filter rules:
+
+```javascript
+{ offset: 0, length: 9, captures: [{ index: 1, name: 'user', value: 'abc' }] }
+```
+
+- `index` is always `1`; later groups are not reported, so their substrings are collectable right
+  after the match iteration.
+- `name` is present only when group 1 is named (`(?<user>...)`).
+- Non-participating group 1 reports `value: null`; an empty group reports `""`; a pattern with no
+  group yields `[]`.
+- Entries carry no position data — use the match's own `offset`/`length` to slice the buffer.
+- No `d` (hasIndices) flag is involved: `exec` already materializes every group, so reading group 1
+  back is free. The flag never appears in rule text and a user-written `d` is ignored, because rule
+  flags are limited to `s` and `i`.
+
 **Hex Matcher**:
 ```javascript
 {
@@ -131,6 +150,9 @@ rule Demo {
   It can be passed straight to module functions (`string.length($_)`, `hash.md5($_)`). Declaring a
   string named `$_` restores ordinary string semantics. While undeclared, `#_` is `0` and `@_` /
   `!_` are undefined, so comparisons against them are undefined and the filter fails open.
+- **Capture output**: `includeCaptures: true` (a scanner option) also exposes group 1's value in
+  results as `captures: [{ index: 1, name?, value }]`; it is off by default so output stays
+  YARA-shaped.
 - **Verdict**: `reject(a, b)` and `rejectRECapture(a, b)` are each an OR. If any filter returns
   `true`, the candidate is discarded before string facts are built, so `#a`, `@a`, and `$a at N`
   reflect surviving matches only.

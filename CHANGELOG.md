@@ -6,9 +6,8 @@
   discard candidate matches before conditions are evaluated
 - Added `rejectRECapture(...)`, which hands the filter capture group 1 of a regex match (falling
   back to the full match) instead of the whole match
-- Added the `includeCaptures` scanner option, which attaches capture-group offsets to regex
-  matches (1-based indices, absolute byte offsets, names on numbered entries) for downstream
-  use without re-running regexes
+- Added the `includeCaptures` scanner option, which attaches capture group 1's value to regex
+  matches (as `{ index, name?, value }`) for downstream use without re-running regexes
 - Added the `$_` condition placeholder: an undeclared `$_` is the whole buffer as text (the file in
   normal rules, the candidate or capture in filter rules), while a declared `$_` keeps ordinary
   string semantics
