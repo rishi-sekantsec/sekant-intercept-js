@@ -10,6 +10,7 @@ not run in libyara.**
 | `reject(...)` | String modifier | Discard a match when a filter rule returns `true` |
 | `rejectRECapture(...)` | String modifier | Same, but the filter sees capture group 1 |
 | `$_` | Condition placeholder | The whole buffer as text |
+| `includeCaptures` | Scanner option | Capture-group offsets on regex matches |
 
 Implementation notes live in [STRING_FILTER_RULES.md](../design/STRING_FILTER_RULES.md) and
 [STRING_MATCHING_ENGINE.md](../developer/STRING_MATCHING_ENGINE.md).
@@ -155,6 +156,20 @@ The placeholder is resolved at parse time and never enters the string set, so `t
 (`hash.md5(0, filesize)`, `math.entropy(0, filesize)`) when byte-exact access is required.
 
 ---
+
+## 5. Capture group offsets
+
+`new InterceptScanner({ includeCaptures: true })` adds a `captures` array to every regex match:
+
+```javascript
+{ offset: 0, length: 9, captures: [{ index: 1, name: 'user', offset: 3, length: 3 }] }
+```
+
+Group indices are 1-based, offsets are absolute bytes so they can slice the scanned buffer, names
+are attached to numbered entries, and non-participating groups report `null`. Values are not
+included. The option is off by default because `YR_MATCH` carries no capture information, keeping
+the default output YARA-shaped. The `d` flag it relies on is applied internally and never appears in
+rule text.
 
 ## 5. Other Intercept-only details
 

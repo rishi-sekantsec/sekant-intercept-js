@@ -73,6 +73,37 @@ This section provides evidence for *why* the rule matched.
     -   `count` and `matches` array are capped at the scanner's `maxMatches` (default: 100).
     -   `length` is the full matched length and is never truncated; only the verifier's scan window is bounded (4096 bytes, `MAX_RE_SCAN_LIMIT`).
 
+### Capture Group Offsets (Intercept extension)
+
+YARA's match record (`YR_MATCH`) carries no capture information, so capture offsets are opt-in.
+Construct the scanner with `includeCaptures: true`:
+
+```javascript
+const scanner = new InterceptScanner({ includeCaptures: true });
+```
+
+Regex matches then carry an enumerable `captures` array on each match, with **1-based** group
+indices and **absolute byte offsets** into the scanned buffer:
+
+```javascript
+matches: [
+  { offset: 0, length: 9,
+    captures: [ { index: 1, name: 'user', offset: 3, length: 3 },
+                { index: 2, offset: 6, length: 3 } ] }
+]
+```
+
+-   `name` is present only for named groups (`(?<user>...)`).
+-   A non-participating group reports `offset: null, length: null`; an empty participating group
+    reports a numeric `offset` with `length: 0`.
+-   Captures are not necessarily inside the match span: `/(?=(abc))/` matches zero bytes but
+    captures three.
+-   Capture values are not included — slice the buffer with `offset`/`length`.
+-   Text and hex strings have no `captures` property.
+-   The `d` flag this needs (ES2022) is applied internally from the option and never appears in
+    rule text; a user-written `d` in `/…/d` is ignored. If a runtime lacks it, capture output is
+    omitted rather than failing compilation.
+
 ## Usage Example
 
 ```javascript

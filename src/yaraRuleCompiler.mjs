@@ -629,7 +629,9 @@ function parseStrings(ruleBody, options = {}) {
       
       try {
         // Compile the string definition into a matcher function
-        const compiledRule = compileYaraLike(definition.trim(), options.limits);
+        const compiledRule = compileYaraLike(definition.trim(), options.limits, {
+          includeCaptures: options.includeCaptures,
+        });
         
         strings[varName] = {
           definition: definition.trim(),

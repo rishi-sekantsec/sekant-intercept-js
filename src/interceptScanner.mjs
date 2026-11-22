@@ -142,6 +142,9 @@ export class InterceptScanner {
     this.setModules(options.modules);
     this.customModules = options.modules || {};
     this.matchLimits = { maxMatches: options.maxMatches ?? MAX_MATCHES };
+    // Opt-in capture-group offsets on regex matches. YARA's match record has no capture data, so
+    // the default output stays YARA-shaped.
+    this.includeCaptures = options.includeCaptures === true;
     const timingOptions = {
       enabled: options.timing?.enabled ?? options.timing?.enableTiming ?? options.enableTiming ?? false,
       autoPrint: options.timing?.autoPrint ?? options.autoPrint ?? false,
@@ -162,10 +165,14 @@ export class InterceptScanner {
     const filterGroup = parseInterceptFilterRuleGroup(rulesText, this.compiledFilterRules || [], {
       limits: this.matchLimits,
       availableModules: this.getAvailableModuleNames(),
+      includeCaptures: this.includeCaptures,
     });
     this.compiledFilterRules = filterGroup.rules;
     this.filterDiagnostics = filterGroup.diagnostics || [];
-    this.compiledRules = parseYaraRuleGroup(rulesText, this.compiledRules || [], { limits: this.matchLimits });
+    this.compiledRules = parseYaraRuleGroup(rulesText, this.compiledRules || [], {
+      limits: this.matchLimits,
+      includeCaptures: this.includeCaptures,
+    });
     this.validateFilterRegistry();
     this.rebuildFilterIndex();
 

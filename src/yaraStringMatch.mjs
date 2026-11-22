@@ -57,12 +57,108 @@ function extractRejectRules(modifiers) {
   };
 }
 
+// `d` (hasIndices) powers capture offsets. It is never user-controlled: rule flags are filtered
+// down to `s`/`i`, and this flag is added only when the scanner opts in. Every supported target
+// provides it; on an older engine capture output is omitted rather than failing compilation.
+const SUPPORTS_INDICES = (() => {
+  try {
+    new RegExp("", "d");
+    return true;
+  } catch {
+    return false;
+  }
+})();
+
+/**
+ * Map each capture group index to its name, so numbered entries can carry the name JS exposes only
+ * through `match.groups`. Scans the pattern once, skipping escapes, character classes, and
+ * non-capturing groups (`(?:`, lookarounds).
+ */
+function captureGroupNames(pattern) {
+  const names = [];
+  let inClass = false;
+
+  for (let i = 0; i < pattern.length; i++) {
+    const char = pattern[i];
+
+    if (char === "\\") {
+      i += 1;
+      continue;
+    }
+    if (inClass) {
+      if (char === "]") inClass = false;
+      continue;
+    }
+    if (char === "[") {
+      inClass = true;
+      continue;
+    }
+    if (char !== "(") continue;
+
+    if (pattern[i + 1] !== "?") {
+      names.push(undefined);
+      continue;
+    }
+
+    const isNamed = pattern[i + 2] === "<" && pattern[i + 3] !== "=" && pattern[i + 3] !== "!";
+    if (!isNamed) continue; // (?:, (?=, (?!, (?<=, (?<!
+
+    const end = pattern.indexOf(">", i + 3);
+    names.push(end === -1 ? undefined : pattern.slice(i + 3, end));
+  }
+
+  return names;
+}
+
+/** Byte offset of every UTF-16 index in `text`, so match and capture offsets stay O(1). */
+function buildByteOffsets(text) {
+  const byteOf = new Uint32Array(text.length + 1);
+  let bytes = 0;
+
+  for (let i = 0; i < text.length; i++) {
+    byteOf[i] = bytes;
+    const codePoint = text.codePointAt(i);
+    bytes += codePoint < 0x80 ? 1 : codePoint < 0x800 ? 2 : codePoint < 0x10000 ? 3 : 4;
+    if (codePoint > 0xffff) {
+      byteOf[i + 1] = bytes;
+      i += 1;
+    }
+  }
+
+  byteOf[text.length] = bytes;
+  return byteOf;
+}
+
+function buildCaptures(indices, groupNames, byteOf, baseOffset) {
+  const captures = [];
+
+  for (let group = 1; group < indices.length; group++) {
+    const span = indices[group];
+    const capture = { index: group };
+    const name = groupNames[group - 1];
+    if (name !== undefined) capture.name = name;
+
+    if (span) {
+      capture.offset = byteOf[span[0]] + baseOffset;
+      capture.length = byteOf[span[1]] - byteOf[span[0]];
+    } else {
+      capture.offset = null;
+      capture.length = null;
+    }
+
+    captures.push(capture);
+  }
+
+  return captures;
+}
+
 /**
  * Compile a YARA-like string definition into a matcher function.
  * Supports: text, wide, ascii, xor, base64/base64wide, regex, hex, fullword, nocase
  * @param {Object} [limits] - Shared `{ maxMatches }` object; read live on every match run
+ * @param {Object} [options] - `{ includeCaptures }`; capture offsets are regex-only
  */
-export function compileYaraLike(definition, limits = DEFAULT_MATCH_LIMITS) {
+export function compileYaraLike(definition, limits = DEFAULT_MATCH_LIMITS, options = {}) {
   definition = definition.trim();
 
   const isRegex = definition.startsWith("/");
@@ -70,7 +166,7 @@ export function compileYaraLike(definition, limits = DEFAULT_MATCH_LIMITS) {
   const quoteMatch = definition.match(/^"(.*)"(.*)$/);
 
   if (isRegex) {
-    return makeRegexMatcher(definition, limits);
+    return makeRegexMatcher(definition, limits, options);
   } else if (isHex) {
     const mods = definition.slice(definition.lastIndexOf("}") + 1);
     return makeHexMatcher(definition.slice(1, definition.lastIndexOf("}")).trim(), mods, limits);
@@ -118,11 +214,13 @@ function addOptionsToMatcher(matcher) {
 // ╭─────────────────────────────╮
 // │ REGEX MATCHER               │
 // ╰─────────────────────────────╯
-function makeRegexMatcher(definition, limits) {
+function makeRegexMatcher(definition, limits, options = {}) {
   const lastSlash = definition.lastIndexOf("/");
   const suffix = definition.slice(lastSlash + 1);
   const { reject, rejectCapture, modifiers } = extractRejectRules(suffix);
   const wantsCapture = rejectCapture.length > 0;
+  // `includeCaptures` is the only switch; it adds `d` internally, so callers never pick flags.
+  const wantsIndices = options.includeCaptures === true && SUPPORTS_INDICES;
   const mods = modifiers.toLowerCase();
   // Flags are only valid immediately after the closing slash; space-separated words after that
   // are modifiers. `nocase` isn't valid on a regex — YARA uses the `i` flag.
@@ -130,13 +228,18 @@ function makeRegexMatcher(definition, limits) {
   const isPrivate = /\bprivate\b/.test(mods);
   const pattern = definition.slice(1, lastSlash);
   const nocase = regexFlags.includes("i");
-  const flags = "g" + (regexFlags.includes("s") ? "s" : "") + (nocase ? "i" : "");
+  const flags =
+    "g" + (regexFlags.includes("s") ? "s" : "") + (nocase ? "i" : "") + (wantsIndices ? "d" : "");
   const literalPrefix = getRegexPrefix(pattern, nocase);
+  const groupNames = wantsIndices ? captureGroupNames(pattern) : [];
   const re = new RegExp(pattern, flags);
 
   const matcher = (data, offset = -1, exactIndex = -1) => {
     const encoder = new TextEncoder();
     const text = new TextDecoder().decode(data);
+    // Built once per run so match and capture offsets stay O(1) instead of encoding a prefix per
+    // match, which would make capture support quadratic on large inputs.
+    const byteOf = wantsIndices ? buildByteOffsets(text) : null;
     const results = [];
     const singleRun = offset >= 0;
     const exact = exactIndex >= 0;
@@ -149,12 +252,19 @@ function makeRegexMatcher(definition, limits) {
     let m;
     while ((m = re.exec(text)) !== null && results.length < limits.maxMatches) {
       if (exact && m.index !== runIndex) break; // prefix hit the regex rejects
-      const byteIndex  = encoder.encode(text.slice(0, m.index)).length;
-      const entry = { offset: byteIndex + offset, length: encoder.encode(m[0]).length };
-      // Only the capture *value* is needed, never its position, so no `d` flag is required.
-      // Absent, non-participating, and empty groups all fall back to the full match.
+      const byteIndex = byteOf ? byteOf[m.index] : encoder.encode(text.slice(0, m.index)).length;
+      const matchLength = byteOf
+        ? byteOf[m.index + m[0].length] - byteOf[m.index]
+        : encoder.encode(m[0]).length;
+      const entry = { offset: byteIndex + offset, length: matchLength };
+      // The reject gate needs only the capture *value*, never its position, so `d` is not required
+      // for rejectRECapture. Absent, non-participating, and empty groups all fall back to the full
+      // match.
       if (wantsCapture && typeof m[1] === "string" && m[1] !== "") {
         Object.defineProperty(entry, "capture", { value: m[1], enumerable: false });
+      }
+      if (wantsIndices && m.indices) {
+        entry.captures = buildCaptures(m.indices, groupNames, byteOf, offset);
       }
       results.push(entry);
       re.lastIndex = m.index + 1; // Move forward to find overlapping matches
