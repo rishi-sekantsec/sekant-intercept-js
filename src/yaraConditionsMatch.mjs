@@ -268,6 +268,10 @@ export class ConditionEvaluator {
       // String identifiers
       case "stringIdentifier":
         return this.evaluateStringIdentifier(node);
+
+      // Intercept extension: an undeclared `$_` resolves to the buffer text
+      case "buffer":
+        return this.bufferText();
       case "stringCount":
         return this.getStringCount(node.identifier);
       case "stringOffset": {
@@ -488,6 +492,18 @@ export class ConditionEvaluator {
       default:
         throw new Error(`Unknown node type: ${type}`);
     }
+  }
+
+  /**
+   * Intercept extension: text of the buffer under evaluation. `$_` resolves here when the rule does
+   * not declare a string with that name. Decoded once per evaluator, and there is one evaluator per
+   * rule per scan, so nothing is shared across scans and modules stay pure.
+   */
+  bufferText() {
+    if (this._bufferText === undefined) {
+      this._bufferText = this.data ? new TextDecoder().decode(this.data) : "";
+    }
+    return this._bufferText;
   }
 
   /**

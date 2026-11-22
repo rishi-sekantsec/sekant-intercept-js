@@ -168,8 +168,28 @@ rule Demo {
 - `rejectRECapture(<filter name>, ...)` — same as `reject`, but the filter receives capture
   group 1 of a regex match, falling back to the full match when no group exists, group 1 is empty,
   or group 1 did not participate. Text and hex strings always pass the full match.
+- `$_` in a condition refers to the whole buffer being evaluated, as decoded text: the file for
+  normal rules, the candidate for `reject(...)`, and capture group 1 (or its fallback) for
+  `rejectRECapture(...)`. Decoding is lossy for invalid UTF-8; use `(0, filesize)` arguments when
+  byte-exact access is required.
 
-See [STRING_FILTER_RULES.md](../design/STRING_FILTER_RULES.md) for semantics.
+  Declaring a string named `$_` overrides the placeholder, restoring ordinary string semantics.
+  While `$_` is undeclared, the related forms use YARA's spelling (`#_`, `@_`, `!_` — not `#$_`)
+  and behave like any other undeclared identifier:
+
+  | Form | Value when `$_` is undeclared |
+  |---|---|
+  | `$_` | the buffer, as text (truthy when non-empty) |
+  | `#_` | `0` |
+  | `@_` | `undefined` |
+  | `!_` | `undefined` |
+
+  An `undefined` result propagates through comparisons, so `!_ == 0` is `undefined`, not `true`:
+  the rule does not match, and a filter rule fails open (the candidate is kept).
+
+See [STRING_FILTER_RULES.md](../design/STRING_FILTER_RULES.md) for semantics, and
+[INTERCEPT_EXTENSIONS.md](INTERCEPT_EXTENSIONS.md) for the complete list of extensions to
+standard YARA.
 
 ---
-**Last Updated:** 2026-11-20
+**Last Updated:** 2026-11-22

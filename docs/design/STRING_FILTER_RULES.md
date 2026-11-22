@@ -2,6 +2,9 @@
 
 **Status:** Implemented.
 
+For the user-facing summary of every Intercept-only construct, see
+[INTERCEPT_EXTENSIONS.md](../general/INTERCEPT_EXTENSIONS.md).
+
 ## 1. Summary
 
 An Intercept-only extension that discards verified string matches before rule conditions are
@@ -106,6 +109,50 @@ Here the filter sees only the captured file name, so `$dot` tests the name rathe
 
 The capture value is derived from the decoded match text using the same conversion the matcher
 already uses for reported match lengths. It is not exposed in scan results.
+
+### Accessing the buffer from a condition
+
+An undeclared `$_` refers to the whole buffer passed to the filter, as decoded text:
+
+```yara
+filter rule luhn_valid {
+  condition:
+    validators.isLuhn($_)
+}
+
+rule Card {
+  strings:
+    $c = /card[ =:]+([0-9]{13,19})/ rejectRECapture(luhn_valid)
+  condition:
+    $c
+}
+```
+
+| Context | Value of `$_` |
+|---|---|
+| `reject(...)` filter | the candidate bytes, decoded |
+| `rejectRECapture(...)` filter | capture group 1, or the full match on fallback, decoded |
+| normal rule | the whole file, decoded |
+
+`$_` is resolved at parse time by rewriting the identifier to a buffer node, so it never enters the
+string set: `any of them` and friends are unaffected, and no phantom match is created.
+
+Declaring a string named `$_` overrides the placeholder everywhere. While `$_` is undeclared, the
+length/offset/count forms use YARA's spelling (`#_`, `@_`, `!_`) and keep their ordinary
+undeclared-identifier behavior:
+
+| Form | Value when `$_` is undeclared |
+|---|---|
+| `$_` | buffer text; truthy when non-empty |
+| `#_` | `0` |
+| `@_` | `undefined` |
+| `!_` | `undefined` |
+
+`undefined` propagates through every comparison, so `!_ == 0` evaluates to `undefined` rather than
+`true`; the rule does not match and a filter rule fails open, keeping the candidate. Use
+`filesize` for the buffer length when `$_` is not declared.
+
+Decoding is lossy for invalid UTF-8; use `(0, filesize)` arguments for byte-exact work.
 
 ## 4. Compilation
 
@@ -260,6 +307,9 @@ explicit split between the flag token and trailing modifiers.
 | `rejectRECapture` group selection | Group 1 only; named and later groups ignored |
 | Missing/empty/non-participating group | Fall back to the full match |
 | String types for `rejectRECapture` | All three; text and hex always fall back |
+| Buffer placeholder | Undeclared `$_`, rewritten at parse time; a declared `$_` wins |
+| Placeholder type | Decoded text; `(0, filesize)` for byte-exact work |
+| `#_` / `@_` / `!_` when `$_` is undeclared | `0` / `undefined` / `undefined` (fail-open in filters) |
 
 ## 11. Assumptions
 

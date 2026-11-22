@@ -387,7 +387,44 @@ export function parseConditionToAST(condition, strings = {}) {
   const ast = parseStructure(processed, strings);
   
   // Phase 3: restore both kinds of literal in the AST and validate operator operands
-  return restoreStringLiterals(ast, literals, condition);
+  const restored = restoreStringLiterals(ast, literals, condition);
+
+  // Phase 4: resolve the Intercept buffer placeholder
+  return applyBufferPlaceholder(restored, strings);
+}
+
+/**
+ * Intercept extension: an undeclared `$_` refers to the whole buffer — the file for normal rules,
+ * the candidate or capture for filter rules. A declared `$_` keeps ordinary string semantics.
+ *
+ * Only the bare identifier is rewritten. The count/offset/length forms (`#_`, `@_`, `!_`) are left
+ * alone, so they keep the behavior they have for any undeclared identifier: `0`, `undefined`,
+ * `undefined`. They work normally once `$_` is declared.
+ *
+ * Resolving at parse time keeps `them` — which enumerates the declared strings — unaffected, so
+ * this never synthesizes a phantom string match.
+ */
+function applyBufferPlaceholder(ast, strings) {
+  if (Object.prototype.hasOwnProperty.call(strings ?? {}, "$_")) return ast;
+
+  return mapAstNodes(ast, (node) =>
+    node.type === "stringIdentifier" && node.identifier === "$_" ? { type: "buffer" } : node
+  );
+}
+
+function mapAstNodes(node, visit) {
+  if (!node || typeof node !== "object") return node;
+  if (Array.isArray(node)) return node.map((item) => mapAstNodes(item, visit));
+
+  const mapped = visit(node);
+  if (mapped !== node) return mapped;
+
+  for (const key of Object.keys(node)) {
+    const value = node[key];
+    if (value && typeof value === "object") node[key] = mapAstNodes(value, visit);
+  }
+
+  return node;
 }
 
 /**

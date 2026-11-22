@@ -6,6 +6,9 @@
   discard candidate matches before conditions are evaluated
 - Added `rejectRECapture(...)`, which hands the filter capture group 1 of a regex match (falling
   back to the full match) instead of the whole match
+- Added the `$_` condition placeholder: an undeclared `$_` is the whole buffer as text (the file in
+  normal rules, the candidate or capture in filter rules), while a declared `$_` keeps ordinary
+  string semantics
 - Added `InterceptScanner.scanFilterRules()` for evaluating filter rules directly
 - Scan results now expose a non-enumerable `diagnostics` property
 

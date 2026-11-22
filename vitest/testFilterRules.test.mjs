@@ -1371,4 +1371,133 @@ await test('6.3 filters that reference no custom module do not initialize any', 
   assertEquals(moduleInstance.calls, 0);
 });
 
+// ═════════════════════════════════════════════════════════════════════════
+// Section 7: The $_ buffer placeholder
+// ═════════════════════════════════════════════════════════════════════════
+
+await test('7.1 $_ is the candidate buffer inside a filter', async () => {
+  assertArrayLength(await scanCapture('string.length($_) == 3', '$a = "abc" reject(probe)', 'abc'), 0);
+  assertArrayLength(await scanCapture('string.length($_) == 4', '$a = "abc" reject(probe)', 'abc'), 1);
+});
+
+await test('7.2 $_ is the capture inside a rejectRECapture filter', async () => {
+  assertArrayLength(await scanCapture('string.length($_) == 3', '$a = /ab(cde)f/ rejectRECapture(probe)', 'abcdef'), 0);
+  assertArrayLength(await scanCapture('string.length($_) == 6', '$a = /ab(cde)f/ rejectRECapture(probe)', 'abcdef'), 1);
+});
+
+await test('7.3 $_ reaches module functions as text', async () => {
+  const scanner = new InterceptScanner();
+  scanner.compile(`
+    filter rule abc_hash {
+      condition:
+        hash.md5($_) == "900150983cd24fb0d6963f7d28e17f72"
+    }
+    rule R {
+      strings:
+        $a = "abc" reject(abc_hash)
+      condition:
+        $a
+    }
+  `);
+
+  assertArrayLength(await scanner.scan('abc'), 0);
+});
+
+await test('7.4 $_ is the whole file in a normal rule condition', async () => {
+  const scanner = new InterceptScanner();
+  scanner.compile(`
+    rule R {
+      strings:
+        $a = "abc"
+      condition:
+        $a and string.length($_) == 6
+    }
+  `);
+
+  assertArrayLength(await scanner.scan('abcdef'), 1);
+  assertArrayLength(await scanner.scan('abcdefg'), 0);
+});
+
+await test('7.5 a declared $_ keeps ordinary string semantics', async () => {
+  const scanner = new InterceptScanner();
+  scanner.compile(`
+    rule R {
+      strings:
+        $_ = "abc"
+      condition:
+        $_
+    }
+  `);
+
+  assertArrayLength(await scanner.scan('abc'), 1);
+  assertArrayLength(await scanner.scan('xyz'), 0);
+});
+
+await test('7.6 $_ never joins the of-them set', async () => {
+  const scanner = new InterceptScanner();
+  scanner.compile(`
+    rule R {
+      strings:
+        $a = "zzz"
+      condition:
+        any of them and string.length($_) == 3
+    }
+  `);
+
+  assertArrayLength(await scanner.scan('abc'), 0, '$a never matches, so the rule must not match');
+});
+
+await test('7.7 #_ is 0 while @_ and !_ are undefined when $_ is undeclared', async () => {
+  const countRule = new InterceptScanner();
+  countRule.compile(`
+    rule R {
+      strings:
+        $a = "abc"
+      condition:
+        $a and #_ == 0
+    }
+  `);
+  assertArrayLength(await countRule.scan('abc'), 1, '#_ evaluates to 0 for an undeclared $_');
+
+  const lengthRule = new InterceptScanner();
+  lengthRule.compile(`
+    rule R {
+      strings:
+        $a = "abc"
+      condition:
+        $a and !_ == 0
+    }
+  `);
+  assertArrayLength(await lengthRule.scan('abc'), 0, '!_ is undefined, so the comparison is undefined');
+
+  const offsetRule = new InterceptScanner();
+  offsetRule.compile(`
+    rule R {
+      strings:
+        $a = "abc"
+      condition:
+        $a and @_ == 0
+    }
+  `);
+  assertArrayLength(await offsetRule.scan('abc'), 0, '@_ is undefined, so the comparison is undefined');
+});
+
+await test('7.8 a filter using !_ fails open when $_ is undeclared', async () => {
+  const scanner = new InterceptScanner();
+  scanner.compile(`
+    filter rule needs_length {
+      condition:
+        !_ == 3
+    }
+    rule R {
+      strings:
+        $a = "abc" reject(needs_length)
+      condition:
+        $a
+    }
+  `);
+
+  assertArrayLength(await scanner.scan('abc'), 1, 'undefined must not reject the candidate');
+});
+
 printSummary();

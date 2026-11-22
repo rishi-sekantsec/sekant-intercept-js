@@ -126,6 +126,11 @@ rule Demo {
 - **Capture input**: `rejectRECapture(...)` hands the filter capture group 1 instead of the full
   match. If the pattern has no group, or group 1 is empty or did not participate, the full match is
   used. Text and hex strings therefore always pass the full match. Only group 1 is considered.
+- **Buffer access**: an undeclared `$_` in a condition is the whole buffer as decoded text — the
+  candidate for `reject(...)`, the capture for `rejectRECapture(...)`, and the file in normal rules.
+  It can be passed straight to module functions (`string.length($_)`, `hash.md5($_)`). Declaring a
+  string named `$_` restores ordinary string semantics. While undeclared, `#_` is `0` and `@_` /
+  `!_` are undefined, so comparisons against them are undefined and the filter fails open.
 - **Verdict**: `reject(a, b)` and `rejectRECapture(a, b)` are each an OR. If any filter returns
   `true`, the candidate is discarded before string facts are built, so `#a`, `@a`, and `$a at N`
   reflect surviving matches only.
