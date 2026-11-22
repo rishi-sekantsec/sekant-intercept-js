@@ -57,6 +57,18 @@ function extractRejectRules(modifiers) {
   };
 }
 
+// `d` (hasIndices) supplies capture positions. It is never user-controlled: rule flags are
+// filtered down to `s`/`i`, and this flag is added only when capture output is requested. If an
+// engine lacks it, values are still reported and positions fall back to null.
+const SUPPORTS_INDICES = (() => {
+  try {
+    new RegExp("", "d");
+    return true;
+  } catch {
+    return false;
+  }
+})();
+
 /**
  * Name of the first capture group, so the numbered entry can carry the name JS exposes only through
  * `match.groups`. Scans the pattern once, skipping escapes, character classes, and non-capturing
@@ -164,6 +176,7 @@ function makeRegexMatcher(definition, limits, options = {}) {
   // `includeCaptures` is the only switch for capture output. It needs no regex flag: `exec` already
   // materializes every group, so reading group 1 back is free.
   const wantsCaptureOutput = options.includeCaptures === true;
+  const wantsIndices = wantsCaptureOutput && SUPPORTS_INDICES;
   const mods = modifiers.toLowerCase();
   // Flags are only valid immediately after the closing slash; space-separated words after that
   // are modifiers. `nocase` isn't valid on a regex — YARA uses the `i` flag.
@@ -171,7 +184,8 @@ function makeRegexMatcher(definition, limits, options = {}) {
   const isPrivate = /\bprivate\b/.test(mods);
   const pattern = definition.slice(1, lastSlash);
   const nocase = regexFlags.includes("i");
-  const flags = "g" + (regexFlags.includes("s") ? "s" : "") + (nocase ? "i" : "");
+  const flags =
+    "g" + (regexFlags.includes("s") ? "s" : "") + (nocase ? "i" : "") + (wantsIndices ? "d" : "");
   const literalPrefix = getRegexPrefix(pattern, nocase);
   const firstGroupName = wantsCaptureOutput ? firstCaptureGroupName(pattern) : undefined;
   const re = new RegExp(pattern, flags);
@@ -202,12 +216,27 @@ function makeRegexMatcher(definition, limits, options = {}) {
       // groups' substrings become collectable as soon as the iteration ends.
       if (wantsCaptureOutput) {
         if (m.length > 1) {
-          const value = typeof m[1] === "string" ? m[1] : null;
-          entry.captures = [
+          const capture =
             firstGroupName === undefined
-              ? { index: 1, value }
-              : { index: 1, name: firstGroupName, value },
-          ];
+              ? { index: 1, value: typeof m[1] === "string" ? m[1] : null }
+              : { index: 1, name: firstGroupName, value: typeof m[1] === "string" ? m[1] : null };
+
+          const span = wantsIndices ? m.indices?.[1] : null;
+          if (span) {
+            // Positions are derived from the match start so the work stays inside the match span;
+            // a capture earlier than the match (lookbehind) falls back to a prefix encode.
+            const startByte =
+              span[0] >= m.index
+                ? byteIndex + encoder.encode(text.slice(m.index, span[0])).length
+                : encoder.encode(text.slice(0, span[0])).length;
+            capture.offset = startByte + offset;
+            capture.length = encoder.encode(text.slice(span[0], span[1])).length;
+          } else {
+            capture.offset = null;
+            capture.length = null;
+          }
+
+          entry.captures = [capture];
         } else {
           entry.captures = [];
         }

@@ -73,7 +73,7 @@ This section provides evidence for *why* the rule matched.
     -   `count` and `matches` array are capped at the scanner's `maxMatches` (default: 100).
     -   `length` is the full matched length and is never truncated; only the verifier's scan window is bounded (4096 bytes, `MAX_RE_SCAN_LIMIT`).
 
-### Capture Group Values (Intercept extension)
+### Capture Groups (Intercept extension)
 
 YARA's match record (`YR_MATCH`) carries no capture information, so capture output is opt-in.
 Construct the scanner with `includeCaptures: true`:
@@ -82,28 +82,33 @@ Construct the scanner with `includeCaptures: true`:
 const scanner = new InterceptScanner({ includeCaptures: true });
 ```
 
-Regex matches then carry an enumerable `captures` array holding **capture group 1** — the same
-group `rejectRECapture(...)` passes to filter rules:
+Regex matches then carry an enumerable `captures` array with **capture group 1** — the same group
+`rejectRECapture(...)` passes to filter rules — including its value and its byte position:
 
 ```javascript
 matches: [
   { offset: 0, length: 9,
-    captures: [ { index: 1, name: 'user', value: 'abc' } ] }
+    captures: [ { index: 1, name: 'user', value: 'abc', offset: 3, length: 3 } ] }
 ]
 ```
 
 -   `index` is always `1`; later groups are not reported, so their substrings are collectable
     immediately after the match iteration.
 -   `name` is present only when group 1 is named (`(?<user>...)`).
--   A non-participating group 1 reports `value: null`; an empty participating group reports `""`.
-    A pattern with no capture group yields `captures: []`.
--   A lookahead capture is reported even when the match itself is zero-length, as in `/(?=(abc))/`.
+-   `offset` and `length` are **absolute byte offsets** into the scanned buffer, so
+    `data.slice(offset, offset + length)` yields the captured text.
+-   A non-participating group 1 reports `value: null, offset: null, length: null`; an empty
+    participating group reports `""` at a numeric offset with `length: 0`. A pattern with no
+    capture group yields `captures: []`.
+-   A capture may lie outside the match span: `/(?=(abc))/` matches zero bytes but captures three,
+    and `/(?<=(ab))c/` captures bytes before the match.
 -   Text and hex strings have no `captures` property.
--   **No position data**: entries carry no `offset`/`length`. Slice the scanned buffer with the
-    match's own `offset`/`length`, or compare `value` directly.
--   **No `d` flag**: `exec` already materializes every group, so reading group 1 back is free.
-    Capture output therefore costs one small object per match and nothing in the regex engine. A
-    user-written `d` in `/…/d` is still ignored, since rule flags are limited to `s` and `i`.
+-   **`d` flag**: positions require the ES2022 `d` (hasIndices) flag, which is applied internally
+    from the option and never appears in rule text — a user-written `d` in `/…/d` is ignored, since
+    rule flags are limited to `s` and `i`. If a runtime lacks it, `value` is still reported and
+    `offset`/`length` are `null`.
+-   **Cost**: roughly 1.25x on a scan dominated by many regex matches; verification of individual
+    candidates is unaffected.
 
 ## Usage Example
 

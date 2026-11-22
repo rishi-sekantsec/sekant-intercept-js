@@ -110,10 +110,11 @@ Here the filter sees only the captured file name, so `$dot` tests the name rathe
 The capture value is derived from the decoded match text using the same conversion the matcher
 already uses for reported match lengths.
 
-**Output:** the same group 1 value can be surfaced in results with the scanner's
-`includeCaptures: true` option, as `captures: [{ index: 1, name?, value }]` on each regex match.
-Only group 1 is kept, so other groups' substrings are collectable immediately, entries carry no
-position data, and no `d` flag is needed. It is off by default to keep output YARA-shaped.
+**Output:** the same group 1 can be surfaced in results with the scanner's
+`includeCaptures: true` option, as `captures: [{ index: 1, name?, value, offset, length }]` on each
+regex match — absolute byte positions, so downstream can slice the buffer without re-running the
+regex. Only group 1 is kept, so other groups' substrings are collectable immediately. Positions use
+the ES2022 `d` flag, applied internally; it is off by default to keep output YARA-shaped.
 
 ### Accessing the buffer from a condition
 
@@ -315,7 +316,7 @@ explicit split between the flag token and trailing modifiers.
 | Buffer placeholder | Undeclared `$_`, rewritten at parse time; a declared `$_` wins |
 | Placeholder type | Decoded text; `(0, filesize)` for byte-exact work |
 | `#_` / `@_` / `!_` when `$_` is undeclared | `0` / `undefined` / `undefined` (fail-open in filters) |
-| Capture output | Opt-in `includeCaptures`; group 1 value only, no positions, no `d` flag |
+| Capture output | Opt-in `includeCaptures`; group 1 only, with `value` plus byte `offset`/`length` via internal `d` |
 
 ## 11. Assumptions
 

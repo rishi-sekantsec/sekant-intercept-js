@@ -58,64 +58,25 @@ All matcher objects share this interface:
 }
 ```
 
-### Capture Group Values
+### Capture Groups
 
 Constructing the scanner with `includeCaptures: true` adds a `captures` array to every regex match
-object, holding **capture group 1** — the same group `rejectRECapture(...)` passes to filter rules:
+object, holding **capture group 1** — the same group `rejectRECapture(...)` passes to filter rules —
+with its value and byte position:
 
 ```javascript
-{ offset: 0, length: 9, captures: [{ index: 1, name: 'user', value: 'abc' }] }
+{ offset: 0, length: 9, captures: [{ index: 1, name: 'user', value: 'abc', offset: 3, length: 3 }] }
 ```
 
 - `index` is always `1`; later groups are not reported, so their substrings are collectable right
   after the match iteration.
 - `name` is present only when group 1 is named (`(?<user>...)`).
-- Non-participating group 1 reports `value: null`; an empty group reports `""`; a pattern with no
-  group yields `[]`.
-- Entries carry no position data — use the match's own `offset`/`length` to slice the buffer.
-- No `d` (hasIndices) flag is involved: `exec` already materializes every group, so reading group 1
-  back is free. The flag never appears in rule text and a user-written `d` is ignored, because rule
-  flags are limited to `s` and `i`.
-
-**Hex Matcher**:
-```javascript
-{
-  type: "hex"
-  // Note: Hex matchers handle wildcards and jumps internally via Regex
-}
-```
-
-## Handling of String Types
-
-### Text Strings
--   **Compilation**: Strings are converted to byte sequences.
--   **Modifiers**:
-    -   `ascii`, `wide`: Generates corresponding byte patterns (single-byte vs double-byte with nulls).
-    -   `nocase`: Generates case-insensitive variants or configure the matcher to ignore case.
-    -   `xor`: Generates multiple variants of the string XORed with keys 0-255.
-    -   `base64`: Calculations valid range of base64 permutations.
--   **Optimization**: Text literals are the primary candidates for the Aho-Corasick automaton.
-
-### Regular Expressions
--   **Engine**: Uses JavaScript's native `RegExp` engine.
--   **Optimization**: extract *literal prefixes* from the regex (e.g., `/http:\/\/server\.com\/[a-z]+/` -> `http://server.com/`) to use as Aho-Corasick candidates.
--   **Execution**:
-    1.  Search for the literal prefix using AC.
-    2.  If found, run the full JS `RegExp` on the surrounding data to verify the match.
-    3.  If no prefix can be extracted, falls back to a linear scan (slower).
-
-### Hex Strings
--   **Compilation**: Parsed into a sequence of bytes and wildcards.
--   **Wildcards**: Supported (e.g., `{ 11 ?? 33 }`).
--   **Jumps**: Variable jumps (`[2-4]`) are converted into internal regex representations for matching.
--   **Optimization**: Like regex, hex strings with fixed leading sequences use those sequences as AC candidates. Patterns starting with wildcards generally require slower scanning methods.
-
-## Aho-Corasick Engine
-
-The `ahocorasickEngine.mjs` implements the Aho-Corasick algorithm:
--   **Input**: A set of "keywords" (literals from text strings, prefixes from regex/hex).
--   **Output**: A state machine that scans data in O(n) time, reporting when any keyword is found.
--   **Purpose**: To drastically reduce the number of times expensive full-matchers (Regex/Hex) need to run.
+- `offset`/`length` are absolute byte offsets into the scanned buffer.
+- Non-participating group 1 reports `value`, `offset` and `length` as `null`; an empty group reports
+  `""` with `length: 0`; a pattern with no group yields `[]`.
+- Positions need the ES2022 `d` (hasIndices) flag, added internally from the option. It never
+  appears in rule text, and a user-written `d` is ignored because rule flags are limited to `s` and
+  `i`. Without `d` support, values are still reported and positions fall back to `null`.
 
 ## Intercept Filter Rules
 
@@ -150,8 +111,8 @@ rule Demo {
   It can be passed straight to module functions (`string.length($_)`, `hash.md5($_)`). Declaring a
   string named `$_` restores ordinary string semantics. While undeclared, `#_` is `0` and `@_` /
   `!_` are undefined, so comparisons against them are undefined and the filter fails open.
-- **Capture output**: `includeCaptures: true` (a scanner option) also exposes group 1's value in
-  results as `captures: [{ index: 1, name?, value }]`; it is off by default so output stays
+- **Capture output**: `includeCaptures: true` (a scanner option) also exposes group 1 in results as
+  `captures: [{ index: 1, name?, value, offset, length }]`; it is off by default so output stays
   YARA-shaped.
 - **Verdict**: `reject(a, b)` and `rejectRECapture(a, b)` are each an OR. If any filter returns
   `true`, the candidate is discarded before string facts are built, so `#a`, `@a`, and `$a at N`

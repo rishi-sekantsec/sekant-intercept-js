@@ -10,7 +10,7 @@ not run in libyara.**
 | `reject(...)` | String modifier | Discard a match when a filter rule returns `true` |
 | `rejectRECapture(...)` | String modifier | Same, but the filter sees capture group 1 |
 | `$_` | Condition placeholder | The whole buffer as text |
-| `includeCaptures` | Scanner option | Capture group 1 value on regex matches |
+| `includeCaptures` | Scanner option | Capture group 1 value and position on regex matches |
 
 Implementation notes live in [STRING_FILTER_RULES.md](../design/STRING_FILTER_RULES.md) and
 [STRING_MATCHING_ENGINE.md](../developer/STRING_MATCHING_ENGINE.md).
@@ -157,23 +157,25 @@ The placeholder is resolved at parse time and never enters the string set, so `t
 
 ---
 
-## 5. Capture group values
+## 5. Capture groups
 
 `new InterceptScanner({ includeCaptures: true })` adds a `captures` array to every regex match,
 holding capture group 1 — the same group `rejectRECapture(...)` passes to filter rules:
 
 ```javascript
-{ offset: 0, length: 9, captures: [{ index: 1, name: 'user', value: 'abc' }] }
+{ offset: 0, length: 9, captures: [{ index: 1, name: 'user', value: 'abc', offset: 3, length: 3 }] }
 ```
 
-Only group 1 is kept, so the remaining groups' strings are collectable immediately, and entries carry
-no position data — slice the scanned buffer with the match's own `offset`/`length` if you need
-bytes. `name` appears only for a named group 1, non-participating group 1 reports `value: null`, an
-empty group reports `""`, and a pattern without groups yields `[]`.
+Only group 1 is kept, so the remaining groups' strings are collectable immediately. `offset` and
+`length` are absolute byte offsets, so `data.slice(offset, offset + length)` gives the captured text.
+`name` appears only for a named group 1; a non-participating group reports `value`, `offset` and
+`length` as `null`; an empty group reports `""` with `length: 0`; a pattern without groups yields
+`[]`.
 
-No `d` flag is involved: `exec` already materializes every group, so reading group 1 back is free.
-The option is off by default because `YR_MATCH` carries no capture information, keeping default
-output YARA-shaped.
+Positions come from the ES2022 `d` (hasIndices) flag, applied internally from the option — never
+written in rule text, and a user-written `d` is ignored. Where the runtime lacks it, values are still
+reported and positions are `null`. The option is off by default because `YR_MATCH` carries no capture
+information, keeping default output YARA-shaped.
 
 ## 6. Other Intercept-only details
 
