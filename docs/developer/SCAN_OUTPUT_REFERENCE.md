@@ -71,7 +71,47 @@ This section provides evidence for *why* the rule matched.
     -   Anonymous strings (`$ = "pattern"`) are internal and **removed** from this output.
 -   **Limits**:
     -   `count` and `matches` array are capped at the scanner's `maxMatches` (default: 100).
-    -   `length` is the full matched length and is never truncated; only the verifier's scan window is bounded (4096 bytes, `MAX_RE_SCAN_LIMIT`).
+    -   `length` is the full matched length and is never truncated; only the literal-prefixed regex verifier's scan window is bounded (4096 bytes, `MAX_RE_SCAN_LIMIT`).
+
+### Capture Groups (Intercept extension)
+
+YARA's match record (`YR_MATCH`) carries no capture information, so capture output is opt-in.
+Construct the scanner with `includeCaptures: true`:
+
+```javascript
+const scanner = new InterceptScanner({ includeCaptures: true });
+```
+
+Regex matches then carry an enumerable `captures` array with **capture group 1** — the same group
+`rejectRECapture(...)` passes to filter rules — including its value and its byte position:
+
+```javascript
+matches: [
+  { offset: 0, length: 9,
+    captures: [ { index: 1, name: 'user', value: 'abc', offset: 3, length: 3 } ] }
+]
+```
+
+-   `index` is always `1`; later groups are not reported, so their substrings are collectable
+    immediately after the match iteration.
+-   `name` is present only when group 1 is named (`(?<user>...)`).
+-   `offset` and `length` are **absolute byte offsets** into the scanned buffer, so
+    `data.slice(offset, offset + length)` yields the captured text.
+-   A non-participating group 1 reports `value: null, offset: null, length: null`; an empty
+    participating group reports `""` at a numeric offset with `length: 0`. A pattern with no
+    capture group yields `captures: []`.
+-   A capture may lie outside the match span: `/(?=(abc))/` matches zero bytes but captures three,
+    and `/(?<=(ab))c/` captures bytes before the match.
+-   Text and hex strings have no `captures` property.
+-   **`d` flag**: positions require the ES2022 `d` (hasIndices) flag, which is applied internally
+    from the option and never appears in rule text — a user-written `d` in `/…/d` is ignored, since
+    rule flags are limited to `s` and `i`. If a runtime lacks it, `value` is still reported and
+    `offset`/`length` are `null`.
+-   **Cost**: V8 allocates the `indices` structure per match, which is the bulk of the overhead —
+    roughly 1.2x on a scan dominated by many regex matches. Converting UTF-16 indices to byte
+    offsets uses a table built once per matcher run (from the second match onward), so a
+    many-match scan stays linear in the buffer; the single-match verification path never builds
+    it and is unaffected.
 
 ## Usage Example
 

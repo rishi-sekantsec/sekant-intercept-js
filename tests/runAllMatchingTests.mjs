@@ -32,13 +32,13 @@ const testSuites = [
     name: 'Aho-Corasick Engine',
     file: 'testAhoCorasickComprehensive.mjs',
     description: 'Multi-pattern matching with all YARA modifiers',
-    expectedTests: 152
+    expectedTests: 156
   },
   {
     name: 'String Pattern Matching',
     file: 'testComprehensiveStringMatcher.mjs',
     description: 'Hex patterns, regex, and string compilation',
-    expectedTests: 130
+    expectedTests: 136
   },
   {
     name: 'Condition Evaluation',

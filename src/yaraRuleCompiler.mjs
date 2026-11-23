@@ -15,6 +15,11 @@
  */
 
 import { compileYaraLike } from './yaraStringMatch.mjs';
+import { parseConditionToAST } from './yaraConditionParser.mjs';
+
+const RULE_START_RE = /^\s*(?:\s*(?:private|global)\s+)*rule\b/i;
+const FILTER_RULE_START_RE = /^\s*(?:\s*(?:private|global)\s+)*filter\s+rule\b/i;
+const BUILTIN_MODULE_NAMES = new Set(['pe', 'elf', 'math', 'hash', 'string', 'time']);
 
 /**
  * List of supported YARA modules
@@ -61,9 +66,38 @@ function parseImports(text) {
 }
 
 /**
+ * A regex literal only starts where YARA allows one: after the `=` of a string definition, or
+ * after the `matches` operator. Everywhere else `/` is just a character.
+ */
+function isRegexStart(text, index) {
+  let p = index - 1;
+  while (p >= 0 && (text[p] === ' ' || text[p] === '\t')) p--;
+  if (p < 0) return false;
+  if (text[p] === '=') return true;
+
+  let wordStart = p;
+  while (wordStart >= 0 && /[A-Za-z_]/.test(text[wordStart])) wordStart--;
+  return text.slice(wordStart + 1, p + 1) === 'matches';
+}
+
+/** Index of the closing slash of the regex literal starting at `start`, or -1 if it never closes. */
+function findRegexEnd(text, start) {
+  for (let i = start + 1; i < text.length; i++) {
+    if (text[i] === '\\') {
+      i += 1; // escaped character, including \/
+    } else if (text[i] === '/') {
+      return i;
+    } else if (text[i] === '\n') {
+      return -1; // regex literals cannot span lines
+    }
+  }
+  return -1;
+}
+
+/**
  * Remove comments from YARA rule text
  * Handles both single-line (//) and multi-line C-style comments
- * Preserves strings to avoid removing comment-like patterns inside them
+ * Preserves string and regex literals to avoid removing comment-like patterns inside them
  * @param {string} text - The text to strip comments from
  * @returns {string} Text with comments removed
  */
@@ -89,6 +123,19 @@ function stripComments(text) {
         } else {
           result += text[i++];
         }
+      }
+    }
+    // Check for a regex literal (preserve it as-is). Without this, an escaped `\/` right before
+    // the closing `/` reads as the start of a `//` comment and truncates the definition. `//` and
+    // `/*` are always comments, never empty regexes.
+    else if (text[i] === '/' && text[i + 1] !== '/' && text[i + 1] !== '*' && isRegexStart(text, i)) {
+      const end = findRegexEnd(text, i);
+      if (end < 0) {
+        // Unterminated: leave the slash as ordinary text so the rest is still comment-stripped.
+        result += text[i++];
+      } else {
+        result += text.slice(i, end + 1);
+        i = end + 1;
       }
     }
     // Check for single-line comment
@@ -185,11 +232,28 @@ export function parseYaraRuleGroup(multiRuleText, existingRules = [], options = 
   let currentRuleText = '';
   let braceDepth = 0;
   let inRule = false;
+  let skipFilterDepth = 0;
 
   const lines = multiRuleText.split('\n');
   for (let line of lines) {
+    // Filter rules are owned by parseInterceptFilterRuleGroup. Skip their blocks entirely instead
+    // of relying on the rule-start pattern failing to match, so rule-like text inside a filter
+    // body cannot open a bogus rule.
+    if (skipFilterDepth > 0) {
+      const braceCounts = countBracesOutsideStrings(line);
+      skipFilterDepth += braceCounts.openCount - braceCounts.closeCount;
+      continue;
+    }
+
+    if (!inRule && FILTER_RULE_START_RE.test(line)) {
+      const braceCounts = countBracesOutsideStrings(line);
+      const depth = braceCounts.openCount - braceCounts.closeCount;
+      skipFilterDepth = depth > 0 ? depth : 0;
+      continue;
+    }
+
     // Check for the start of a rule (with or without private modifier)
-    if (!inRule && line.match(/^\s*(?:\s*(?:private|global)\s+)*rule\b/i)) {
+    if (!inRule && RULE_START_RE.test(line)) {
       inRule = true;
       currentRuleText = line + '\n';
       // Count braces while ignoring those inside strings
@@ -230,6 +294,257 @@ export function parseYaraRuleGroup(multiRuleText, existingRules = [], options = 
   });
 
   return rules;
+}
+
+/**
+ * Parse Intercept filter rules from a rule group.
+ *
+ * Filter rules are kept in their own registry: `parseYaraRuleGroup` skips their blocks, so the two
+ * sets never mix. Each returned rule carries a cached condition AST and the module roots its
+ * condition references, both reused for every candidate evaluation.
+ *
+ * @param {string} multiRuleText - Rule text that may contain `filter rule` declarations
+ * @param {Array} existingFilterRules - Previously parsed filter rules (appended to / replaced)
+ * @param {Object} options - `{ limits, availableModules }`
+ * @returns {{ rules: Array, diagnostics: Array }}
+ */
+export function parseInterceptFilterRuleGroup(multiRuleText, existingFilterRules = [], options = {}) {
+  parseImports(multiRuleText);
+
+  multiRuleText = multiRuleText.replace(/^\s*import\s+"[^"]+"\s*$/gm, '');
+
+  const rules = [...(existingFilterRules ?? [])];
+  const diagnostics = [];
+  let currentRuleText = '';
+  let braceDepth = 0;
+  let inFilterRule = false;
+  let skipRuleDepth = 0;
+
+  const addFilterRule = (ruleText) => {
+    const { rule, diagnostics: ruleDiagnostics } = parseFilterRule(ruleText, options);
+    diagnostics.push(...ruleDiagnostics);
+
+    const existingIndex = rules.findIndex((existing) => existing.name === rule.name);
+    if (existingIndex >= 0) {
+      diagnostics.push({
+        code: 'duplicate-filter-rule',
+        severity: 'warning',
+        message: `Filter rule "${rule.name}" redefined; the later definition replaces the earlier one`,
+        filter: rule.name,
+      });
+      rules[existingIndex] = rule;
+    } else {
+      rules.push(rule);
+    }
+  };
+
+  for (const line of multiRuleText.split('\n')) {
+    // Skip normal rule bodies so rule-like text inside them cannot be mistaken for a filter rule.
+    if (skipRuleDepth > 0) {
+      const braceCounts = countBracesOutsideStrings(line);
+      skipRuleDepth += braceCounts.openCount - braceCounts.closeCount;
+      continue;
+    }
+
+    if (!inFilterRule && FILTER_RULE_START_RE.test(line)) {
+      inFilterRule = true;
+      currentRuleText = line + '\n';
+      const braceCounts = countBracesOutsideStrings(line);
+      braceDepth = braceCounts.openCount - braceCounts.closeCount;
+      if (braceDepth === 0 && braceCounts.openCount > 0) {
+        addFilterRule(currentRuleText);
+        inFilterRule = false;
+        currentRuleText = '';
+      }
+      continue;
+    }
+
+    if (!inFilterRule && RULE_START_RE.test(line)) {
+      const braceCounts = countBracesOutsideStrings(line);
+      const depth = braceCounts.openCount - braceCounts.closeCount;
+      skipRuleDepth = depth > 0 ? depth : 0;
+      continue;
+    }
+
+    if (inFilterRule) {
+      currentRuleText += line + '\n';
+      const braceCounts = countBracesOutsideStrings(line);
+      braceDepth += braceCounts.openCount - braceCounts.closeCount;
+      if (braceDepth === 0) {
+        addFilterRule(currentRuleText);
+        inFilterRule = false;
+        currentRuleText = '';
+      }
+    }
+  }
+
+  rules.forEach((rule) => {
+    rule.id = `filter:${rule.name}`;
+  });
+
+  return { rules, diagnostics };
+}
+
+/**
+ * Parse a single `filter rule` declaration.
+ * @param {string} ruleText - Complete filter rule text
+ * @param {Object} options - `{ limits, availableModules }`
+ * @returns {{ rule: Object, diagnostics: Array }}
+ */
+function parseFilterRule(ruleText, options = {}) {
+  const text = stripComments(ruleText).trim();
+  const diagnostics = [];
+
+  const ruleKeywordIndex = text.search(/\brule\b/i);
+  const prefix = ruleKeywordIndex >= 0 ? text.slice(0, ruleKeywordIndex) : '';
+  if (/\bglobal\b/i.test(prefix)) {
+    throw new Error('Invalid Intercept filter rule: global filter rules are not supported');
+  }
+
+  const ruleMatch = text.match(/^(?:.*)?rule\s+(\w+)(?:\s*:\s*([\w\s]+))?\s*\{/);
+  if (!ruleMatch) {
+    throw new Error('Invalid Intercept filter rule: missing rule declaration');
+  }
+
+  const name = ruleMatch[1];
+  const tags = ruleMatch[2] ? ruleMatch[2].trim().split(/\s+/) : [];
+
+  const bodyMatch = text.match(/\{([\s\S]*)\}/);
+  if (!bodyMatch) {
+    throw new Error('Invalid Intercept filter rule: missing rule body');
+  }
+
+  const ruleBody = bodyMatch[1];
+  const metadata = parseMetadata(ruleBody);
+  const strings = parseStrings(ruleBody, options);
+
+  for (const [varName, strDef] of Object.entries(strings)) {
+    if (strDef.reject?.length || strDef.rejectCapture?.length) {
+      throw new Error(
+        `Invalid Intercept filter rule "${name}": reject(...) and rejectRECapture(...) are not allowed on string ${varName}`
+      );
+    }
+  }
+
+  const condition = parseCondition(ruleBody);
+
+  let conditionAST = null;
+  try {
+    conditionAST = parseConditionToAST(condition, strings);
+  } catch (error) {
+    diagnostics.push({
+      code: 'invalid-filter-condition',
+      severity: 'warning',
+      message: `Filter rule "${name}" condition could not be parsed: ${error.message}`,
+      filter: name,
+    });
+  }
+
+  const usedModules = collectUsedModules(conditionAST, {
+    availableModules: options.availableModules ?? [],
+    filterName: name,
+    diagnostics,
+  });
+
+  return {
+    rule: {
+      name,
+      tags,
+      metadata,
+      strings,
+      condition,
+      conditionAST,
+      usedModules,
+      filter: true,
+      private: true,
+    },
+    diagnostics,
+  };
+}
+
+/**
+ * Collect the module roots a filter condition references.
+ *
+ * Qualified roots (`pe.foo`, `hash.md5(...)`) are the only candidates; loop variables are excluded
+ * so `for any s in pe.sections : (s.name == ...)` doesn't treat `s` as a module. Unknown roots are
+ * kept (a custom module may be registered later) but produce a diagnostic.
+ */
+function collectUsedModules(ast, { availableModules = [], filterName, diagnostics }) {
+  if (!ast) return [];
+
+  const loopVariables = new Set();
+  const qualifiedRoots = new Set();
+
+  walkAst(ast, (node) => {
+    if (node.type === 'ruleIdentifier') {
+      throw new Error(
+        `Invalid Intercept filter rule "${filterName}": conditions cannot reference rules ("${node.name}")`
+      );
+    }
+
+    if (node.type === 'for') {
+      const variable = node.variable;
+      if (typeof variable === 'string') loopVariables.add(variable);
+      else if (variable?.name) loopVariables.add(variable.name);
+    }
+
+    if (node.type === 'moduleFunction' && typeof node.module === 'string') {
+      qualifiedRoots.add(node.module);
+    }
+
+    if (
+      node.type === 'memberAccess' &&
+      node.object?.type === 'identifier' &&
+      typeof node.object.name === 'string'
+    ) {
+      qualifiedRoots.add(node.object.name.split('.')[0]);
+    }
+
+    if (node.type === 'identifier' && typeof node.name === 'string' && node.name.includes('.')) {
+      qualifiedRoots.add(node.name.split('.')[0]);
+    }
+  });
+
+  const knownModules = new Set([...BUILTIN_MODULE_NAMES, ...availableModules]);
+  const usedModules = [];
+
+  for (const root of qualifiedRoots) {
+    if (loopVariables.has(root)) continue;
+
+    if (root === 'pe' || root === 'elf') {
+      throw new Error(
+        `Invalid Intercept filter rule "${filterName}": the "${root}" module is not available for candidate buffers`
+      );
+    }
+
+    usedModules.push(root);
+
+    if (!knownModules.has(root)) {
+      diagnostics.push({
+        code: 'unknown-module',
+        severity: 'warning',
+        message: `Filter rule "${filterName}" references unknown module "${root}"`,
+        filter: filterName,
+      });
+    }
+  }
+
+  return usedModules;
+}
+
+function walkAst(node, visit) {
+  if (!node || typeof node !== 'object') return;
+
+  if (Array.isArray(node)) {
+    for (const item of node) walkAst(item, visit);
+    return;
+  }
+
+  visit(node);
+
+  for (const value of Object.values(node)) {
+    if (value && typeof value === 'object') walkAst(value, visit);
+  }
 }
 
 /**
@@ -356,7 +671,9 @@ function parseStrings(ruleBody, options = {}) {
       
       try {
         // Compile the string definition into a matcher function
-        const compiledRule = compileYaraLike(definition.trim(), options.limits);
+        const compiledRule = compileYaraLike(definition.trim(), options.limits, {
+          includeCaptures: options.includeCaptures,
+        });
         
         strings[varName] = {
           definition: definition.trim(),

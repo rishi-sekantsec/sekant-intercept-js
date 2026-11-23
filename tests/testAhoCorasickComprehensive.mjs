@@ -2132,8 +2132,7 @@ await test('28.14 Wide emoji pattern (UTF-16LE bytes)', () => {
   // Create UTF-16LE representation of emoji (surrogate pair)
   // High: 0xD83D (55357), Low: 0xDE00 (56832)
   const wideEmoji = new Uint8Array([0x3D, 0xD8, 0x00, 0xDE]);
-  const dataStr = new TextDecoder().decode(wideEmoji);
-  const matches = ac.search(dataStr);
+  const matches = ac.search(wideEmoji);
   assertMinMatches(matches, 1, 'Should match emoji in wide format as byte sequence');
 });
 
@@ -2452,12 +2451,9 @@ await test('33.2 XOR with key 255 (max)', () => {
     }
   `);
   const ac = new AhoCorasick(rules);
-  // "test" XOR 255 = invert all bits
-  const xorred = String.fromCharCode(
-    't'.charCodeAt(0) ^ 255,
-    'e'.charCodeAt(0) ^ 255,
-    's'.charCodeAt(0) ^ 255,
-    't'.charCodeAt(0) ^ 255
+  // "test" XOR 255 = invert all bits; searched as bytes, since inverted bytes are not text
+  const xorred = new Uint8Array(
+    Array.from(encoder.encode('test')).map((b) => b ^ 255)
   );
   const matches = ac.search(xorred);
   assertMinMatches(matches, 1, 'XOR 255 should match bit-inverted string');
@@ -2641,6 +2637,72 @@ await test('36.3 Wide nocase', () => {
   const matches2 = ac.search(wideLower);
   assertMinMatches(matches1, 1, 'Should match uppercase wide');
   assertMinMatches(matches2, 1, 'Should match lowercase wide');
+});
+
+// ═════════════════════════════════════════════════════════════════════════
+// SECTION 37: CANDIDATE DEDUPLICATION AND BYTE SEMANTICS
+// ═════════════════════════════════════════════════════════════════════════
+console.log('\n📋 Section 37: Candidate Deduplication and Byte Semantics\n');
+
+await test('37.1 nocase case variants report one candidate per occurrence', () => {
+  const rules = parseYaraRuleGroup(`
+    rule Test {
+      strings:
+        $a = "hello" nocase
+      condition:
+        $a
+    }
+  `);
+  const ac = new AhoCorasick(rules);
+  const matches = ac.search('HELLO Hello hello');
+  assertEquals(matches.length, 3, 'Each occurrence should yield exactly one candidate');
+});
+
+await test('37.2 XOR key variants report one candidate per occurrence', () => {
+  const rules = parseYaraRuleGroup(`
+    rule Test {
+      strings:
+        $a = "abc" xor(0x01-0x10)
+      condition:
+        $a
+    }
+  `);
+  const ac = new AhoCorasick(rules);
+  const encoded = new Uint8Array(Array.from(encoder.encode('abc')).map((b) => b ^ 0x05));
+  const matches = ac.search(encoded);
+  assertEquals(matches.length, 1, 'The matching key should be reported once');
+  assertEquals(matches[0].xorKey, 0x05, 'Candidate should carry the XOR key that matched');
+});
+
+await test('37.3 Non-ASCII text string matches UTF-8 bytes', () => {
+  const rules = parseYaraRuleGroup(`
+    rule Test {
+      strings:
+        $a = "测试数据" ascii
+      condition:
+        $a
+    }
+  `);
+  const ac = new AhoCorasick(rules);
+  const data = encoder.encode('这是测试数据的例子');
+  const matches = ac.search(data);
+  assertMinMatches(matches, 1, 'Should match the UTF-8 byte sequence in raw data');
+  assertEquals(matches[0].offset, encoder.encode('这是').length, 'Offset should be a byte offset');
+});
+
+await test('37.4 Repeated scans reuse the automaton without stale dedupe state', () => {
+  const rules = parseYaraRuleGroup(`
+    rule Test {
+      strings:
+        $a = "aa" nocase
+      condition:
+        $a
+    }
+  `);
+  const ac = new AhoCorasick(rules);
+  const first = ac.search('AA');
+  const second = ac.search('AA');
+  assertEquals(first.length, second.length, 'A second scan should report the same candidates');
 });
 
 // ═════════════════════════════════════════════════════════════════════════

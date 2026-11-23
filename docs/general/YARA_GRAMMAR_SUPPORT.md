@@ -47,7 +47,7 @@ The engine supports the following string types and modifiers:
 
 ### Regular Expressions (`/.../`)
 The engine uses JavaScript's native `RegExp` engine.
-- **Modifiers**: `nocase` (`i` flag), `dotall` (`s` flag).
+- **Modifiers**: `nocase` (equivalent to the `i` flag, as in YARA), `dotall` (`s` flag). `ascii`, `wide`, and `fullword` are not applied to regexes yet.
 - **Note**: This is a key difference from `libyara`, which uses its own regex engine (RE2/PCRE-like). JS RegExp supports most standard features but may behave differently with complex lookaheads/lookbehinds or specific escape sequences.
 - **Unsupported**: Possessive quantifiers (`*+`, `++`) and atomic groups `(?>...)` are not supported in JS regex.
 
@@ -145,5 +145,51 @@ There is a known divergence in operator precedence between this engine and stand
 ### 6. Modules
 Only the standard modules listed in [MODULES_SUPPORT.md](MODULES_SUPPORT.md) are available. Custom modules or C-based plugins are not supported.
 
+### 7. Intercept-Only Syntax
+The following constructs are accepted by Intercept but are syntax errors in standard YARA:
+
+```yara
+filter rule is_small {
+    condition:
+        filesize <= 4
+}
+
+rule Demo {
+    strings:
+        $a = "EVIL" reject(is_small)
+        $b = /evil\/([a-z]+)/ rejectRECapture(is_small)
+    condition:
+        $a or $b
+}
+```
+
+- `filter rule <name> { ... }` declarations.
+- `reject(<filter name>, ...)` on text, hex, and regex strings. Names are case-sensitive.
+- `rejectRECapture(<filter name>, ...)` — same as `reject`, but the filter receives capture
+  group 1 of a regex match, falling back to the full match when no group exists, group 1 is empty,
+  or group 1 did not participate. Text and hex strings always pass the full match.
+- `$_` in a condition refers to the whole buffer being evaluated, as decoded text: the file for
+  normal rules, the candidate for `reject(...)`, and capture group 1 (or its fallback) for
+  `rejectRECapture(...)`. Decoding is lossy for invalid UTF-8; use `(0, filesize)` arguments when
+  byte-exact access is required.
+
+  Declaring a string named `$_` overrides the placeholder, restoring ordinary string semantics.
+  While `$_` is undeclared, the related forms use YARA's spelling (`#_`, `@_`, `!_` — not `#$_`)
+  and behave like any other undeclared identifier:
+
+  | Form | Value when `$_` is undeclared |
+  |---|---|
+  | `$_` | the buffer, as text (truthy when non-empty) |
+  | `#_` | `0` |
+  | `@_` | `undefined` |
+  | `!_` | `undefined` |
+
+  An `undefined` result propagates through comparisons, so `!_ == 0` is `undefined`, not `true`:
+  the rule does not match, and a filter rule fails open (the candidate is kept).
+
+See [STRING_FILTER_RULES.md](../design/STRING_FILTER_RULES.md) for semantics, and
+[INTERCEPT_EXTENSIONS.md](INTERCEPT_EXTENSIONS.md) for the complete list of extensions to
+standard YARA.
+
 ---
-**Last Updated:** 2026-02-11
+**Last Updated:** 2026-11-22

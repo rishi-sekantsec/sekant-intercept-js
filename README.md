@@ -171,6 +171,7 @@ We provide detailed documentation for different audiences:
 
 ### General Usage
 *   **[YARA Grammar Support](docs/general/YARA_GRAMMAR_SUPPORT.md)**: What features (hex, loops, regex) are supported.
+*   **[Intercept Extensions](docs/general/INTERCEPT_EXTENSIONS.md)**: Constructs beyond standard YARA (filter rules, `reject`, `rejectRECapture`, `$_`, `includeCaptures`).
 *   **[Engine Differences](docs/general/ENGINE_DIFFERENCES.md)**: Critical differences between this JS engine and C-based libyara.
 
 ### Developer & Architecture

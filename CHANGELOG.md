@@ -1,5 +1,31 @@
 # Changelog
 
+## Unreleased
+
+- Added support for the `nocase` modifier on regular expressions (`/foo/ nocase`), which YARA
+  accepts as an alias for the `i` flag
+- Reworked the literal matching pipeline: the Aho-Corasick automaton is byte-keyed, case/XOR
+  variants of a pattern report a single candidate per occurrence, and candidates are verified by an
+  exact-position compare instead of a forward window scan
+- Fixed comment stripping treating an escaped slash at the end of a regex (`/a\//`) as the start
+  of a `//` comment, which truncated the definition, and a string that fails to compile no longer
+  aborts the scan
+- Fixed non-ASCII text strings never matching raw byte data, literal prefixes extracted from
+  optional, alternated, or anchored regex tails (`/https?:/`, `/foo|bar/`, `/^foo/`, `/foo$/`)
+  producing wrong matches, and regex match offsets shifting on buffers that are not valid UTF-8
+- Added Intercept-only `filter rule` declarations and the `reject(...)` string modifier, which
+  discard candidate matches before conditions are evaluated
+- Added `rejectRECapture(...)`, which hands the filter capture group 1 of a regex match (falling
+  back to the full match) instead of the whole match
+- Added the `includeCaptures` scanner option, which attaches capture group 1 to regex matches as
+  `{ index, name?, value, offset, length }` — value plus absolute byte position — for downstream use
+  without re-running regexes
+- Added the `$_` condition placeholder: an undeclared `$_` is the whole buffer as text (the file in
+  normal rules, the candidate or capture in filter rules), while a declared `$_` keeps ordinary
+  string semantics
+- Added `InterceptScanner.scanFilterRules()` for evaluating filter rules directly
+- Scan results now expose a non-enumerable `diagnostics` property
+
 ## v1.0.1
 
 - Changed default behavior for unknown strings to return false

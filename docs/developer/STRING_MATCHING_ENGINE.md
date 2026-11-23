@@ -10,12 +10,25 @@ The string matching engine is responsible for compiling YARA string definitions 
 2.  **Fast Search (`ahocorasickEngine.mjs`)**: Builds an Aho-Corasick automaton for multi-pattern search.
 3.  **Verification**: Confirms potential matches found by Aho-Corasick or performs linear scans for unoptimized patterns.
 
+### Candidate Pipeline
+
+1.  The automaton is built from 3-byte atoms, one per pattern variant: `wide`, `ascii`, base64
+    permutations, and one variant per XOR key. Atoms are keyed by byte (not by character string)
+    and chosen deterministically from the most selective window of the pattern, preferring
+    distinct bytes and, for `nocase`, windows with fewer ASCII letters.
+2.  Case-insensitive atoms are stored as case variants, and every variant of one pattern shares a
+    group id. Because all variants of a pattern reach a given offset at the same scan position, the
+    engine reports one candidate per occurrence instead of one per variant.
+3.  Each candidate is verified at its exact offset: text strings with a byte compare (reusing the
+    candidate's XOR key), literal-prefixed regexes with a sticky `RegExp` over a per-buffer decoded
+    view. Verification never re-scans forward, so cost is proportional to the match, not the file.
+
 ## Matcher Object Structure
 
 When the rule compiler processes strings, it generates a "Matcher Object" for each variable. This object encapsulates the logic finding that specific pattern in the data.
 
 ### Limits & Defaults
--   **Verification Scan Window**: 4096 bytes (`MAX_RE_SCAN_LIMIT`, mirroring libyara's `YR_RE_SCAN_LIMIT`). Bounds how far Aho-Corasick candidate verification can see for text strings and literal-prefixed regexes; a match extending past the window is not detected. Hex strings and regexes without a literal prefix are scanned over the full buffer. Reported match `length` values are never truncated.
+-   **Verification Scan Window**: 4096 bytes (`MAX_RE_SCAN_LIMIT`, mirroring libyara's `YR_RE_SCAN_LIMIT`). Bounds how far a literal-prefixed regex matcher searches when called with an explicit offset; a match extending past the window is not detected. Text strings are verified by a direct byte comparison and have no window. Hex strings and regexes without a literal prefix are scanned over the full buffer. Reported match `length` values are never truncated.
 -   **Max Matches Per String**: 100 (`MAX_MATCHES`), configurable via the scanner's `maxMatches` option/property. Enforced for hex strings and regexes without a literal prefix; literal text matches are uncapped.
 
 ### Common Structure
@@ -25,9 +38,12 @@ All matcher objects share this interface:
 {
   // The executable search function
   // @param data {Uint8Array} - The binary data to scan
-  // @param offset {number} - (Optional) If provided, verify match ONLY at this offset
+  // @param offset {number} - (Optional) Search start; a single run returns at most one match
   // @returns {Array} - List of match objects { offset, length, ... }
   matcher: function(data, offset),
+  // Exact-position check used for Aho-Corasick candidates. `hint` is the candidate, so text
+  // matchers can reuse the XOR key the automaton matched.
+  verifyAt: function(data, offset, hint),
 
   type: "text" | "hex" | "regex",
   private: boolean // If true, matches are not included in final output
@@ -58,45 +74,83 @@ All matcher objects share this interface:
 }
 ```
 
-**Hex Matcher**:
+### Capture Groups
+
+Constructing the scanner with `includeCaptures: true` adds a `captures` array to every regex match
+object, holding **capture group 1** — the same group `rejectRECapture(...)` passes to filter rules —
+with its value and byte position:
+
 ```javascript
-{
-  type: "hex"
-  // Note: Hex matchers handle wildcards and jumps internally via Regex
+{ offset: 0, length: 9, captures: [{ index: 1, name: 'user', value: 'abc', offset: 3, length: 3 }] }
+```
+
+- `index` is always `1`; later groups are not reported, so their substrings are collectable right
+  after the match iteration.
+- `name` is present only when group 1 is named (`(?<user>...)`).
+- `offset`/`length` are absolute byte offsets into the scanned buffer.
+- Non-participating group 1 reports `value`, `offset` and `length` as `null`; an empty group reports
+  `""` with `length: 0`; a pattern with no group yields `[]`.
+- Positions need the ES2022 `d` (hasIndices) flag, added internally from the option. It never
+  appears in rule text, and a user-written `d` is ignored because rule flags are limited to `s` and
+  `i`. Without `d` support, values are still reported and positions fall back to `null`.
+- `d` reports UTF-16 indices, so a char->byte table is built once per matcher run — from the second
+  match onward — keeping a many-match scan linear. The single-match verification path never builds
+  it, so per-candidate filtering pays nothing.
+
+## Intercept Filter Rules
+
+Intercept adds `reject(...)` and `rejectRECapture(...)` string modifiers backed by `filter rule`
+declarations. Neither is valid YARA; both are rejected by libyara.
+
+```yara
+filter rule starts_with_mal {
+  strings:
+    $m = "mal"
+  condition:
+    $m
+}
+
+rule Demo {
+  strings:
+    $a = "malware" reject(starts_with_mal)
+    $b = /dl\/([a-z0-9]+)/ rejectRECapture(starts_with_mal)
+  condition:
+    any of them
 }
 ```
 
-## Handling of String Types
-
-### Text Strings
--   **Compilation**: Strings are converted to byte sequences.
--   **Modifiers**:
-    -   `ascii`, `wide`: Generates corresponding byte patterns (single-byte vs double-byte with nulls).
-    -   `nocase`: Generates case-insensitive variants or configure the matcher to ignore case.
-    -   `xor`: Generates multiple variants of the string XORed with keys 0-255.
-    -   `base64`: Calculations valid range of base64 permutations.
--   **Optimization**: Text literals are the primary candidates for the Aho-Corasick automaton.
-
-### Regular Expressions
--   **Engine**: Uses JavaScript's native `RegExp` engine.
--   **Optimization**: extract *literal prefixes* from the regex (e.g., `/http:\/\/server\.com\/[a-z]+/` -> `http://server.com/`) to use as Aho-Corasick candidates.
--   **Execution**:
-    1.  Search for the literal prefix using AC.
-    2.  If found, run the full JS `RegExp` on the surrounding data to verify the match.
-    3.  If no prefix can be extracted, falls back to a linear scan (slower).
-
-### Hex Strings
--   **Compilation**: Parsed into a sequence of bytes and wildcards.
--   **Wildcards**: Supported (e.g., `{ 11 ?? 33 }`).
--   **Jumps**: Variable jumps (`[2-4]`) are converted into internal regex representations for matching.
--   **Optimization**: Like regex, hex strings with fixed leading sequences use those sequences as AC candidates. Patterns starting with wildcards generally require slower scanning methods.
-
-## Aho-Corasick Engine
-
-The `ahocorasickEngine.mjs` implements the Aho-Corasick algorithm:
--   **Input**: A set of "keywords" (literals from text strings, prefixes from regex/hex).
--   **Output**: A state machine that scans data in O(n) time, reporting when any keyword is found.
--   **Purpose**: To drastically reduce the number of times expensive full-matchers (Regex/Hex) need to run.
+- **Candidate-only input**: a filter rule is evaluated against the verified match bytes alone
+  (`data[offset .. offset + length]`). It cannot see the rest of the file, which bounds its cost
+  and makes it independent of file size.
+- **Capture input**: `rejectRECapture(...)` hands the filter capture group 1 instead of the full
+  match. If the pattern has no group, or group 1 is empty or did not participate, the full match is
+  used. Text and hex strings therefore always pass the full match. Only group 1 is considered.
+- **Buffer access**: an undeclared `$_` in a condition is the whole buffer as decoded text — the
+  candidate for `reject(...)`, the capture for `rejectRECapture(...)`, and the file in normal rules.
+  It can be passed straight to module functions (`string.length($_)`, `hash.md5($_)`). Declaring a
+  string named `$_` restores ordinary string semantics. While undeclared, `#_` is `0` and `@_` /
+  `!_` are undefined, so comparisons against them are undefined and the filter fails open.
+- **Capture output**: `includeCaptures: true` (a scanner option) also exposes group 1 in results as
+  `captures: [{ index: 1, name?, value, offset, length }]`; it is off by default so output stays
+  YARA-shaped.
+- **Verdict**: `reject(a, b)` and `rejectRECapture(a, b)` are each an OR. If any filter returns
+  `true`, the candidate is discarded before string facts are built, so `#a`, `@a`, and `$a at N`
+  reflect surviving matches only.
+- **Size cap**: matches longer than `MAX_FILTER_RULE_BUFFER_SIZE` (4096) keep the match and skip
+  filtering; a diagnostic is reported. The cap applies to the match length, so a capture is always
+  within it.
+- **Fail-open**: a filter that throws is treated as not rejecting.
+- **Facts**: `filesize` is the candidate length, offsets are buffer-relative, `entrypoint` is `0`.
+- **Modules**: `string`, `time`, `math`, `hash`, and custom modules are available. `pe`/`elf` are
+  compile errors for filter rules. Custom modules receive the candidate buffer and the scan
+  metadata; they are initialized lazily, only for filters that reference them.
+- **Registry**: filter rules live in `InterceptScanner.compiledFilterRules` and never participate
+  in normal matching, results, or Aho-Corasick.
+- **Diagnostics**: `scan()` and `scanFilterRules()` return arrays of matches with a non-enumerable
+  `diagnostics` property (duplicate definitions, unknown filter names/modules, oversized
+  candidates, filter errors, rejection counts).
+- **API**: `scanFilterRules(data, metadata, ruleNames)` evaluates filter rules directly and
+  returns the same result shape as `scan()`.
 
 ## Key Assumptions
 

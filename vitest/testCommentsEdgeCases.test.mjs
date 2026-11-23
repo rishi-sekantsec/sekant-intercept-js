@@ -19,6 +19,34 @@ describe('Comments Edge Cases', () => {
     expect(parsed.strings['$s3'].definition).toBe('"// neither is this"');
   });
 
+  test('should keep a regex whose last slash is escaped and still strip comments', () => {
+    const rule = `
+      rule EscapedSlash {
+        strings:
+          $a = /a\\// // comment after the regex
+          $b = /x\\/y/ /* block comment */
+        condition:
+          any of them
+      }
+    `;
+    const parsed = parseYaraRule(rule);
+    expect(parsed.strings['$a'].definition).toBe('/a\\//');
+    expect(parsed.strings['$b'].definition).toBe('/x\\/y/');
+  });
+
+  test('should keep a regex used with the matches operator', () => {
+    const rule = `
+      rule MatchesRegex {
+        strings:
+          $a = "x"
+        condition:
+          $a matches /x\\/y/
+      }
+    `;
+    const parsed = parseYaraRule(rule);
+    expect(parsed.condition).toBe('$a matches /x\\/y/');
+  });
+
   test('should handle slashes in regex (not comments)', () => {
     const rule = `
       rule RegexSlashes {
