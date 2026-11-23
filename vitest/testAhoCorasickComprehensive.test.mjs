@@ -2151,8 +2151,7 @@ await test('28.14 Wide emoji pattern (UTF-16LE bytes)', () => {
   // Create UTF-16LE representation of emoji (surrogate pair)
   // High: 0xD83D (55357), Low: 0xDE00 (56832)
   const wideEmoji = new Uint8Array([0x3D, 0xD8, 0x00, 0xDE]);
-  const dataStr = new TextDecoder().decode(wideEmoji);
-  const matches = ac.search(dataStr);
+  const matches = ac.search(wideEmoji);
   assertMinMatches(matches, 1, 'Should match emoji in wide format as byte sequence');
 });
 
@@ -2471,12 +2470,9 @@ await test('33.2 XOR with key 255 (max)', () => {
     }
   `);
   const ac = new AhoCorasick(rules);
-  // "test" XOR 255 = invert all bits
-  const xorred = String.fromCharCode(
-    't'.charCodeAt(0) ^ 255,
-    'e'.charCodeAt(0) ^ 255,
-    's'.charCodeAt(0) ^ 255,
-    't'.charCodeAt(0) ^ 255
+  // "test" XOR 255 = invert all bits; searched as bytes, since inverted bytes are not text
+  const xorred = new Uint8Array(
+    Array.from(encoder.encode('test')).map((b) => b ^ 255)
   );
   const matches = ac.search(xorred);
   assertMinMatches(matches, 1, 'XOR 255 should match bit-inverted string');

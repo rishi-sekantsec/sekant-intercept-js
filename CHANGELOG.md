@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Added support for the `nocase` modifier on regular expressions (`/foo/ nocase`), which YARA
+  accepts as an alias for the `i` flag
+- Reworked the literal matching pipeline: the Aho-Corasick automaton is byte-keyed, case/XOR
+  variants of a pattern report a single candidate per occurrence, and candidates are verified by an
+  exact-position compare instead of a forward window scan
+- Fixed non-ASCII text strings never matching raw byte data, literal prefixes extracted from
+  optional, alternated, or anchored regex tails (`/https?:/`, `/foo|bar/`, `/^foo/`, `/foo$/`)
+  producing wrong matches, and regex match offsets shifting on buffers that are not valid UTF-8
 - Added Intercept-only `filter rule` declarations and the `reject(...)` string modifier, which
   discard candidate matches before conditions are evaluated
 - Added `rejectRECapture(...)`, which hands the filter capture group 1 of a regex match (falling

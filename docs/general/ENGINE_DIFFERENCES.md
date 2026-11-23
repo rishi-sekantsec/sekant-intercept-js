@@ -9,12 +9,12 @@ In standard YARA, `import "pe"` is strictly required to use the PE module. In th
 ## 2. Match Limits & Optimization
 To prevent excessive memory usage during scanning (especially in browser environments), this engine enforces limits on capture results.
 - **Max Matches**: The engine limits the number of individual string matches recorded per string to **100** (`MAX_MATCHES`, configurable via the scanner's `maxMatches` option), whereas `libyara` typically records all matches until a much higher system limit.
-- **Verification Scan Window**: For text strings and regexes with a literal prefix, verification is bounded to a **4096-byte** window (`MAX_RE_SCAN_LIMIT`, mirroring `libyara`'s `YR_RE_SCAN_LIMIT`); a match extending beyond it is not detected. Hex strings and regexes without a literal prefix are scanned over the full buffer. Reported match `length` values are never truncated.
+- **Verification Scan Window**: Regexes with a literal prefix are located by the automaton and then verified in place, so a match extending beyond the **4096-byte** window (`MAX_RE_SCAN_LIMIT`, mirroring `libyara`'s `YR_RE_SCAN_LIMIT`) is not detected when the matcher is called with an explicit offset. Text strings are verified by a direct byte comparison and have no window. Hex strings and regexes without a literal prefix are scanned over the full buffer. Reported match `length` values are never truncated.
 - **Large Arrays**: Output objects containing massive byte arrays may be truncated or summarized to prevent JSON serialization failures or memory exhaustion.
 - **Unbounded Jumps**: Unbounded jumps in hex strings (e.g., `[-]`) are limited to **10,000** bytes (`MAX_HEX_JUMP`) to prevent excessive searching, unlike standard YARA which may search much further.
 - **File Size**: The engine scans the **full content** of the buffer provided to `scan()`.
 - **Filesize Keyword Cap**: The `filesize` keyword has an "optimistic" behavior when the `maxFileSize` limit is reached. If a file is larger than `maxFileSize` (default 1MB), comparisons like `filesize > 2MB` will evaluate to `true` (assuming the file *could* be that large). This supports streaming scenarios where the full size is unknown.
-- **Batched Matching**: String matching uses Aho-Corasick for literals, followed by RegExp verification.
+- **Batched Matching**: String matching uses Aho-Corasick for literals, followed by exact-position verification: text strings are confirmed with a byte-for-byte compare (carrying the XOR key the automaton matched), and regexes with a literal prefix are confirmed with a sticky RegExp on a per-buffer decoded view.
 
 ## 3. Regular Expression Engine & Compatibility
 This engine uses JavaScript's native `RegExp` for regular expression matching.
@@ -29,7 +29,7 @@ This engine uses JavaScript's native `RegExp` for regular expression matching.
 
 ## 5. Performance Strategy
 - **Memory Usage (Hex)**: For hex string matching, the engine converts the input buffer to a hex string. While cached, this doubles the memory requirement for the file data during scanning of hex rules (e.g., 1MB file -> 2MB hex string).
-- **Aho-Corasick**: Like `libyara`, this engine uses Aho-Corasick for fast multi-pattern scanning of text literals.
+- **Aho-Corasick**: Like `libyara`, this engine uses Aho-Corasick for fast multi-pattern scanning of text literals. Atoms are byte-keyed, chosen deterministically from the most selective window of each pattern, and case/XOR variants of one pattern collapse into a single candidate per occurrence.
 - **Async Architecture**: The scanner and module system are fundamentally `async`.
   - While standard YARA functions are synchronous, this engine uses `await` internally for module calls (e.g., `hash.md5`, `pe` parsing).
   - This enables support for non-blocking Web Crypto APIs and prevents freezing the main thread during heavy scans.

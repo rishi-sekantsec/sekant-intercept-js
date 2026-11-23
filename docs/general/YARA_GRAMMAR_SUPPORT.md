@@ -47,7 +47,7 @@ The engine supports the following string types and modifiers:
 
 ### Regular Expressions (`/.../`)
 The engine uses JavaScript's native `RegExp` engine.
-- **Modifiers**: `nocase` (`i` flag), `dotall` (`s` flag).
+- **Modifiers**: `nocase` (equivalent to the `i` flag, as in YARA), `dotall` (`s` flag). `ascii`, `wide`, and `fullword` are not applied to regexes yet.
 - **Note**: This is a key difference from `libyara`, which uses its own regex engine (RE2/PCRE-like). JS RegExp supports most standard features but may behave differently with complex lookaheads/lookbehinds or specific escape sequences.
 - **Unsupported**: Possessive quantifiers (`*+`, `++`) and atomic groups `(?>...)` are not supported in JS regex.
 

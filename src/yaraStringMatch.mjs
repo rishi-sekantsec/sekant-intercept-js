@@ -15,8 +15,9 @@
  */
 
 
-// Verification window for Aho-Corasick candidates (text and literal-prefixed regex).
-// Mirrors libyara's YR_RE_SCAN_LIMIT (4096); full-buffer scans are unbounded.
+// Search window for a single-run matcher call (literal-prefixed regexes), mirroring libyara's
+// YR_RE_SCAN_LIMIT (4096). Full-buffer scans are unbounded, and text verification compares bytes
+// at the candidate offset directly, so it needs no window.
 const MAX_RE_SCAN_LIMIT = 4096;
 export const MAX_MATCHES = 100;
 const DEFAULT_MATCH_LIMITS = { maxMatches: MAX_MATCHES };
@@ -169,24 +170,89 @@ export function compileYaraLike(definition, limits = DEFAULT_MATCH_LIMITS, optio
   throw new Error("Unsupported definition: " + definition);
 }
 
-function addOptionsToMatcher(matcher) {
-  // Public contract: `offset < 0` scans the whole buffer, otherwise the search window starts at
-  // `offset` (one byte earlier, so fullword checks at the window start can see the preceding byte).
-  const scan = (data, offset = -1, maxLength = MAX_RE_SCAN_LIMIT, exactIndex = -1) => {
-    if (offset < 0) return matcher(data, -1);
-    const start = Math.max(0, offset - 1);
-    return matcher(data.slice(start, start + maxLength), start, exactIndex < 0 ? -1 : exactIndex - start);
-  };
+function addOptionsToMatcher(matcher, verifyAt) {
+  // Public contract: `offset < 0` scans the whole buffer, otherwise the search starts at `offset`
+  // and a single run returns at most one match per pattern.
+  const scan = (data, offset = -1) => matcher(data, offset, -1);
 
-  // Aho-Corasick candidates ask "is there a match starting exactly here?", which a window scan
-  // cannot answer — its first match may be a neighbouring occurrence.
-  scan.verifyAt = (data, offset) => scan(data, offset, MAX_RE_SCAN_LIMIT, offset);
+  // Aho-Corasick candidates ask "is there a match starting exactly here?", which a forward scan
+  // cannot answer without also returning a neighbouring occurrence. Types with a direct
+  // implementation pass `verifyAt`; `hint` carries the candidate's XOR key so no key search is
+  // needed.
+  scan.verifyAt = verifyAt ?? ((data, offset) => matcher(data, offset, offset));
   return scan;
 }
 
 // ╭─────────────────────────────╮
 // │ REGEX MATCHER               │
 // ╰─────────────────────────────╯
+const textDecoder = new TextDecoder();
+
+// Decoded views of scanned buffers, so a scan with many Aho-Corasick candidates decodes the
+// buffer once instead of once per candidate.
+const decodedBuffers = new WeakMap();
+const asciiBuffers = new WeakMap();
+
+/**
+ * True when every byte is ASCII, which guarantees that byte offsets and decoded character indices
+ * coincide. Purely binary buffers fail this on the first high byte, so they never pay for a
+ * whole-buffer decode they cannot use.
+ */
+function isAsciiBuffer(data) {
+  let ascii = asciiBuffers.get(data);
+  if (ascii === undefined) {
+    ascii = true;
+    for (let i = 0; i < data.length; i++) {
+      if (data[i] >= 0x80) {
+        ascii = false;
+        break;
+      }
+    }
+    asciiBuffers.set(data, ascii);
+  }
+  return ascii;
+}
+
+function makeDecoded(text, byteLength) {
+  return {
+    text,
+    // One code unit per byte means byte offsets and character indices are interchangeable.
+    identity: text.length === byteLength,
+    byteOf: null,
+  };
+}
+
+function getDecodedBuffer(data) {
+  let decoded = decodedBuffers.get(data);
+  if (decoded === undefined) {
+    decoded = makeDecoded(textDecoder.decode(data), data.length);
+    decodedBuffers.set(data, decoded);
+  }
+  return decoded;
+}
+
+/**
+ * Decodes the bytes from `offset` onward. Candidates are byte offsets, so verifying inside a
+ * window that starts at the candidate keeps the match anchored to those bytes even when the
+ * buffer is not valid UTF-8 (where a decoded offset would not line up with a byte offset).
+ */
+function decodeWindow(data, offset) {
+  const end = Math.min(data.length, offset + MAX_RE_SCAN_LIMIT);
+  return makeDecoded(textDecoder.decode(data.subarray(offset, end)), end - offset);
+}
+
+/** Lazily builds the char-index -> byte-offset table for buffers that are not one-to-one. */
+function byteOffsetsOf(decoded) {
+  if (!decoded.identity && decoded.byteOf === null) {
+    decoded.byteOf = buildByteOffsets(decoded.text);
+  }
+  return decoded;
+}
+
+function byteAt(decoded, charIndex) {
+  return decoded.identity ? charIndex : byteOffsetsOf(decoded).byteOf[charIndex];
+}
+
 function makeRegexMatcher(definition, limits, options = {}) {
   const lastSlash = definition.lastIndexOf("/");
   const suffix = definition.slice(lastSlash + 1);
@@ -197,104 +263,144 @@ function makeRegexMatcher(definition, limits, options = {}) {
   const wantsCaptureOutput = options.includeCaptures === true;
   const wantsIndices = wantsCaptureOutput && SUPPORTS_INDICES;
   const mods = modifiers.toLowerCase();
-  // Flags are only valid immediately after the closing slash; space-separated words after that
-  // are modifiers. `nocase` isn't valid on a regex — YARA uses the `i` flag.
+  // Flags are only valid immediately after the closing slash; space-separated words after that are
+  // modifiers. YARA treats `/foo/i` and `/foo/ nocase` as equivalent.
   const regexFlags = mods.match(/^([a-z]*)/)?.[1] ?? "";
   const isPrivate = /\bprivate\b/.test(mods);
   const pattern = definition.slice(1, lastSlash);
-  const nocase = regexFlags.includes("i");
-  const flags =
-    "g" + (regexFlags.includes("s") ? "s" : "") + (nocase ? "i" : "") + (wantsIndices ? "d" : "");
+  const nocase = regexFlags.includes("i") || /\bnocase\b/.test(mods);
+  const commonFlags =
+    (regexFlags.includes("s") ? "s" : "") + (nocase ? "i" : "") + (wantsIndices ? "d" : "");
   const literalPrefix = getRegexPrefix(pattern, nocase);
   const firstGroupName = wantsCaptureOutput ? firstCaptureGroupName(pattern) : undefined;
-  const re = new RegExp(pattern, flags);
+  const re = new RegExp(pattern, "g" + commonFlags);
+  // Sticky twin answers "does a match start exactly at this character?".
+  const reAt = new RegExp(pattern, "y" + commonFlags);
 
-  const matcher = (data, offset = -1, exactIndex = -1) => {
-    const encoder = new TextEncoder();
-    const text = new TextDecoder().decode(data);
-    // Positions are byte offsets, but `d` reports UTF-16 indices. A shared table makes that O(1),
-    // yet costs O(buffer) to build, so it is built only from the second match onward: the
-    // one-match verification path never pays for it, and a many-match scan builds it once instead
-    // of encoding a prefix per match (which was quadratic).
-    let byteOf = null;
-    let matchCount = 0;
-    const byteAt = (charIndex) =>
-      byteOf ? byteOf[charIndex] : encoder.encode(text.slice(0, charIndex)).length;
+  /** Builds a match record; `base` is the byte offset the decoded text starts at. */
+  const buildEntry = (m, decoded, base = 0) => {
+    const startByte = base + byteAt(decoded, m.index);
+    const entry = {
+      offset: startByte,
+      length: base + byteAt(decoded, m.index + m[0].length) - startByte,
+    };
+    // The reject gate needs only the capture *value*, so no indices flag is involved. Absent,
+    // non-participating, and empty groups all fall back to the full match.
+    if (wantsCapture && typeof m[1] === "string" && m[1] !== "") {
+      Object.defineProperty(entry, "capture", { value: m[1], enumerable: false });
+    }
+    // Capture output carries only group 1 — the group rejectRECapture uses — so the other
+    // groups' substrings become collectable as soon as the iteration ends.
+    if (wantsCaptureOutput) {
+      if (m.length > 1) {
+        const capture =
+          firstGroupName === undefined
+            ? { index: 1, value: typeof m[1] === "string" ? m[1] : null }
+            : { index: 1, name: firstGroupName, value: typeof m[1] === "string" ? m[1] : null };
 
-    const results = [];
-    const singleRun = offset >= 0;
-    const exact = exactIndex >= 0;
-    // `re` outlives a call: the matcher runs once per Aho-Corasick candidate plus once per full
-    // scan, and an early `break` (or the MAX_MATCHES cap) leaves `lastIndex` mid-text. Position it
-    // explicitly on entry instead of inheriting the previous run's position.
-    const runIndex = exact ? exactIndex : 0;
-    offset = offset < 0 ? 0 : offset;
-    re.lastIndex = runIndex;
-    let m;
-    while ((m = re.exec(text)) !== null && results.length < limits.maxMatches) {
-      if (exact && m.index !== runIndex) break; // prefix hit the regex rejects
-      if (wantsIndices && matchCount === 1) byteOf = buildByteOffsets(text);
-      matchCount += 1;
-
-      const byteIndex = wantsIndices
-        ? byteAt(m.index)
-        : encoder.encode(text.slice(0, m.index)).length;
-      const matchLength = wantsIndices
-        ? byteAt(m.index + m[0].length) - byteIndex
-        : encoder.encode(m[0]).length;
-      const entry = { offset: byteIndex + offset, length: matchLength };
-      // The reject gate needs only the capture *value*, so no indices flag is involved. Absent,
-      // non-participating, and empty groups all fall back to the full match.
-      if (wantsCapture && typeof m[1] === "string" && m[1] !== "") {
-        Object.defineProperty(entry, "capture", { value: m[1], enumerable: false });
-      }
-      // Capture output carries only group 1 — the group rejectRECapture uses — so the other
-      // groups' substrings become collectable as soon as the iteration ends.
-      if (wantsCaptureOutput) {
-        if (m.length > 1) {
-          const capture =
-            firstGroupName === undefined
-              ? { index: 1, value: typeof m[1] === "string" ? m[1] : null }
-              : { index: 1, name: firstGroupName, value: typeof m[1] === "string" ? m[1] : null };
-
-          const span = wantsIndices ? m.indices?.[1] : null;
-          if (span) {
-            const startByte = byteAt(span[0]);
-            capture.offset = startByte + offset;
-            capture.length = byteAt(span[1]) - startByte;
-          } else {
-            capture.offset = null;
-            capture.length = null;
-          }
-
-          entry.captures = [capture];
+        const span = wantsIndices ? m.indices?.[1] : null;
+        if (span) {
+          const startByte = base + byteAt(decoded, span[0]);
+          capture.offset = startByte;
+          capture.length = base + byteAt(decoded, span[1]) - startByte;
         } else {
-          entry.captures = [];
+          capture.offset = null;
+          capture.length = null;
         }
+
+        entry.captures = [capture];
+      } else {
+        entry.captures = [];
       }
-      results.push(entry);
+    }
+    return entry;
+  };
+
+  // `re`/`reAt` outlive a call: they run once per Aho-Corasick candidate plus once per full scan,
+  // and an early `break` (or the MAX_MATCHES cap) leaves `lastIndex` mid-text. Position them
+  // explicitly on entry instead of inheriting the previous run's position.
+
+  /** Candidates ask "is there a match starting exactly at this byte offset?". */
+  const verifyAt = (data, offset) => {
+    if (isAsciiBuffer(data)) {
+      const decoded = getDecodedBuffer(data);
+      reAt.lastIndex = offset;
+      const m = reAt.exec(decoded.text);
+      return m === null ? [] : [buildEntry(m, decoded)];
+    }
+
+    // Non-ASCII: a decoded index is not the candidate's byte offset, so verify inside the
+    // candidate's own bytes.
+    const window = decodeWindow(data, offset);
+    reAt.lastIndex = 0;
+    const m = reAt.exec(window.text);
+    return m === null ? [] : [buildEntry(m, window, offset)];
+  };
+
+  /** Single run from `offset`: at most one match, bounded by the verification window. */
+  const firstMatchFrom = (data, offset) => {
+    if (isAsciiBuffer(data)) {
+      const decoded = getDecodedBuffer(data);
+      const limit = offset + MAX_RE_SCAN_LIMIT;
+      re.lastIndex = offset;
+      const m = re.exec(decoded.text);
+      return m === null || m.index > limit ? [] : [buildEntry(m, decoded)];
+    }
+
+    const window = decodeWindow(data, offset);
+    re.lastIndex = 0;
+    const m = re.exec(window.text);
+    return m === null ? [] : [buildEntry(m, window, offset)];
+  };
+
+  /** Full-buffer scan: overlapping matches, capped by the shared match limit. */
+  const scanAll = (data) => {
+    const decoded = getDecodedBuffer(data);
+    const results = [];
+    re.lastIndex = 0;
+    let m;
+    while ((m = re.exec(decoded.text)) !== null && results.length < limits.maxMatches) {
+      results.push(buildEntry(m, decoded));
       re.lastIndex = m.index + 1; // Move forward to find overlapping matches
-      if (singleRun) break;
     }
     return results;
   };
 
-  return { matcher: addOptionsToMatcher(matcher), literalPrefix, type: "regex", nocase, private: isPrivate, reject, rejectCapture };
+  const matcher = (data, offset = -1, exactIndex = -1) => {
+    if (exactIndex >= 0) return verifyAt(data, exactIndex);
+    return offset < 0 ? scanAll(data) : firstMatchFrom(data, offset);
+  };
+
+  return { matcher: addOptionsToMatcher(matcher, verifyAt), literalPrefix, type: "regex", nocase, private: isPrivate, reject, rejectCapture };
 }
 
 function getRegexPrefix(pattern, nocase = false) {
-  // Remove leading ^ if present
-  pattern = pattern.replace(/^\^/, "");
-  pattern = nocase ? pattern.toLowerCase() : pattern;
+  // `^`/`$` anchor to the buffer, so a buffer-wide scan is the only sound way to honour them.
+  if (pattern.startsWith("^")) return "";
 
-  // Match literal prefix before first meta pattern
-  // const match = pattern.match(/^((?:\\.|[^\\[\]()|*+?{}.])+)/);
+  const haystack = nocase ? pattern.toLowerCase() : pattern;
+
   // Match literal prefix: either escaped chars (\. \? etc) or non-special chars
-  const match = pattern.match(/^((?:\\[^bBdDwWsSAZzGnrtfv0u]|[^\\[\]()|*+?{}.])+)/);
+  const match = haystack.match(/^((?:\\[^bBdDwWsSAZzGnrtfv0u]|[^\\[\]()|*+?{}.^$])+)/);
   if (!match || match.length < 2) return "";
 
+  let literal = match[1];
+  const following = haystack.slice(literal.length);
+
+  // An anchor right after the literal is buffer-relative, or unreachable mid-pattern.
+  if (following.startsWith("$") || following.startsWith("^")) return "";
+
+  // A trailing alternation means the literal is one branch among several: it is not a prefix of
+  // every match, so the whole buffer has to be scanned.
+  if (following.startsWith("|")) return "";
+
+  // `https?`, `abc*` and `abc{0,2}` make the last literal character optional.
+  if (/^[?*]/.test(following) || /^\{0[,}]/.test(following)) {
+    literal = literal.slice(0, -1);
+  }
+
   // Unescape hex sequences like \x41 → A
-  let prefix = match[1].replace(/\\x([0-9A-Fa-f]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+  let prefix = literal.replace(/\\x([0-9A-Fa-f]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
 
   // Unescape escaped characters like \. → .
   return prefix.replace(/\\(.)/g, "$1");
@@ -364,60 +470,74 @@ function makeTextMatcher(text, opts) {
   }
 
   const matcher = (data, offset = -1, exactIndex = -1) => {
-    let matches = [];
     const singleRun = offset >= 0;
-    // `exactIndex` (relative to the slice) restricts a single run to the candidate's own byte.
-    const runIndex = exactIndex >= 0 ? exactIndex : -1;
-    offset = offset < 0 ? 0 : offset;
+    const start = offset < 0 ? 0 : offset;
+    const end = offset < 0 ? data.length : Math.min(data.length, offset + MAX_RE_SCAN_LIMIT);
+    let matches = [];
 
     for (const { bytes, isWide } of patterns) {
-      if (opts.xor) {
-        const xorMatches = findXorMatches(data, bytes, opts.xor, opts.allowKey0, singleRun, runIndex);
-        matches.push(...xorMatches.map((m) => ({ ...m, length: bytes.length, isWide })));
-      } else {
-        const plainMatches = findPlainMatches(data, bytes, opts.nocase, singleRun, runIndex);
-        matches.push(...plainMatches.map((m) => ({ ...m, length: bytes.length, isWide })));
-      }
+      const found = opts.xor
+        ? findXorMatches(data, bytes, opts.xor, opts.allowKey0, start, end, singleRun, exactIndex)
+        : findPlainMatches(data, bytes, opts.nocase, start, end, singleRun, exactIndex);
+      matches.push(...found.map((m) => ({ ...m, length: bytes.length, isWide })));
     }
 
     if (opts.fullword) {
       matches = matches.filter((m) => isFullWordMatch(data, m.offset, m.length));
     }
 
-    // Adjust the offsets for the original data if offset was specified
-    matches.forEach((m) => {
-      m.offset += offset;
-    });
-
     return matches;
   };
 
-  return { matcher: addOptionsToMatcher(matcher), patterns, type: "text", xor: opts.xor, nocase: opts.nocase, private: opts.private, reject: opts.reject ?? [], rejectCapture: opts.rejectCapture ?? [] };
+  /**
+   * Exact-position verification. Aho-Corasick already located the literal, so this only has to
+   * compare the pattern's bytes at that offset: no window slice and no forward rescan.
+   */
+  const verifyAt = (data, offset, hint) => {
+    const xorKey = hint === undefined ? undefined : hint.xorKey;
+    // An XOR candidate without its key needs the key search after all.
+    if (opts.xor && xorKey === undefined) return matcher(data, offset, offset);
+
+    const matches = [];
+    for (const { bytes, isWide } of patterns) {
+      if (bytes.length === 0 || offset + bytes.length > data.length) continue;
+      if (opts.xor) {
+        if (!matchXorAt(data, offset, bytes, xorKey)) continue;
+        matches.push({ offset, key: xorKey, length: bytes.length, isWide });
+      } else if (matchPlainAt(data, offset, bytes, opts.nocase)) {
+        matches.push({ offset, length: bytes.length, isWide });
+      }
+    }
+
+    return opts.fullword
+      ? matches.filter((m) => isFullWordMatch(data, m.offset, m.length))
+      : matches;
+  };
+
+  return { matcher: addOptionsToMatcher(matcher, verifyAt), patterns, type: "text", xor: opts.xor, nocase: opts.nocase, private: opts.private, reject: opts.reject ?? [], rejectCapture: opts.rejectCapture ?? [] };
 }
 
 // ╭─────────────────────────────╮
 // │ XOR-AWARE MATCHING          │
 // ╰─────────────────────────────╯
-function findXorMatches(data, pattern, keyRange, allowKey0 = true, singleRun = false, exactIndex = -1) {
+function findXorMatches(data, pattern, keyRange, allowKey0 = true, start = 0, end = data.length, singleRun = false, exactIndex = -1) {
   const [minKey, maxKey] = keyRange;
   const matches = [];
   const pLen = pattern.length;
-  const dLen = data.length;
-  const from = exactIndex >= 0 ? exactIndex : 0;
-  if (pLen === 0 || pLen > dLen) return matches;
+  if (pLen === 0 || pLen > data.length) return matches;
+
+  // An exact run only accepts the requested offset, which is a single comparison per key.
+  if (exactIndex >= 0) {
+    for (let candidateKey = minKey; candidateKey <= maxKey; candidateKey++) {
+      if (matchXorAt(data, exactIndex, pattern, candidateKey)) matches.push({ offset: exactIndex, key: candidateKey });
+    }
+    return matches;
+  }
 
   for (let candidateKey = minKey; candidateKey <= maxKey; candidateKey++) {
-    for (let i = from; i <= dLen - pLen; i++) {
-      let ok = true;
-      for (let j = 0; j < pLen; j++) {
-        if ((data[i + j] ^ candidateKey) !== pattern[j]) {
-          ok = false;
-          break;
-        }
-      }
-      if (ok) {
-        // An exact run only accepts the requested offset; a later hit belongs to another candidate.
-        if (exactIndex < 0 || i === exactIndex) matches.push({ offset: i, key: candidateKey });
+    for (let i = start; i + pLen <= end; i++) {
+      if (matchXorAt(data, i, pattern, candidateKey)) {
+        matches.push({ offset: i, key: candidateKey });
         if (singleRun) break;
       }
     }
@@ -428,20 +548,47 @@ function findXorMatches(data, pattern, keyRange, allowKey0 = true, singleRun = f
 // ╭─────────────────────────────╮
 // │ PLAIN MATCHING              │
 // ╰─────────────────────────────╯
-function findPlainMatches(data, pattern, nocase = false, singleRun = false, exactIndex = -1) {
+function findPlainMatches(data, pattern, nocase = false, start = 0, end = data.length, singleRun = false, exactIndex = -1) {
   const matches = [];
   const pLen = pattern.length;
-  const dLen = data.length;
-  const from = exactIndex >= 0 ? exactIndex : 0;
-  outer: for (let i = from; i <= dLen - pLen; i++) {
-    for (let j = 0; j < pLen; j++) {
-      if ((nocase ? lowercaseByte(data[i + j]) : data[i + j]) !== pattern[j]) continue outer;
+  if (pLen > data.length) return matches;
+
+  // An exact run only accepts the requested offset, which is a single comparison.
+  if (exactIndex >= 0) {
+    if (matchPlainAt(data, exactIndex, pattern, nocase)) matches.push({ offset: exactIndex });
+    return matches;
+  }
+
+  for (let i = start; i + pLen <= end; i++) {
+    if (matchPlainAt(data, i, pattern, nocase)) {
+      matches.push({ offset: i });
+      if (singleRun) break;
     }
-    // An exact run only accepts the requested offset; a later hit belongs to another candidate.
-    if (exactIndex < 0 || i === exactIndex) matches.push({ offset: i });
-    if (singleRun) break;
   }
   return matches;
+}
+
+/** Compares a literal pattern against `data` starting exactly at `offset`. */
+function matchPlainAt(data, offset, pattern, nocase) {
+  const pLen = pattern.length;
+  if (offset + pLen > data.length) return false;
+
+  for (let j = 0; j < pLen; j++) {
+    const byte = data[offset + j];
+    if ((nocase ? lowercaseByte(byte) : byte) !== pattern[j]) return false;
+  }
+  return true;
+}
+
+/** Compares a literal pattern against `data` after applying a single-byte XOR key. */
+function matchXorAt(data, offset, pattern, key) {
+  const pLen = pattern.length;
+  if (offset + pLen > data.length) return false;
+
+  for (let j = 0; j < pLen; j++) {
+    if ((data[offset + j] ^ key) !== pattern[j]) return false;
+  }
+  return true;
 }
 
 function lowercaseByte(b) {

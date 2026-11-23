@@ -10,12 +10,25 @@ The string matching engine is responsible for compiling YARA string definitions 
 2.  **Fast Search (`ahocorasickEngine.mjs`)**: Builds an Aho-Corasick automaton for multi-pattern search.
 3.  **Verification**: Confirms potential matches found by Aho-Corasick or performs linear scans for unoptimized patterns.
 
+### Candidate Pipeline
+
+1.  The automaton is built from 3-byte atoms, one per pattern variant: `wide`, `ascii`, base64
+    permutations, and one variant per XOR key. Atoms are keyed by byte (not by character string)
+    and chosen deterministically from the most selective window of the pattern, preferring
+    distinct bytes and, for `nocase`, windows with fewer ASCII letters.
+2.  Case-insensitive atoms are stored as case variants, and every variant of one pattern shares a
+    group id. Because all variants of a pattern reach a given offset at the same scan position, the
+    engine reports one candidate per occurrence instead of one per variant.
+3.  Each candidate is verified at its exact offset: text strings with a byte compare (reusing the
+    candidate's XOR key), literal-prefixed regexes with a sticky `RegExp` over a per-buffer decoded
+    view. Verification never re-scans forward, so cost is proportional to the match, not the file.
+
 ## Matcher Object Structure
 
 When the rule compiler processes strings, it generates a "Matcher Object" for each variable. This object encapsulates the logic finding that specific pattern in the data.
 
 ### Limits & Defaults
--   **Verification Scan Window**: 4096 bytes (`MAX_RE_SCAN_LIMIT`, mirroring libyara's `YR_RE_SCAN_LIMIT`). Bounds how far Aho-Corasick candidate verification can see for text strings and literal-prefixed regexes; a match extending past the window is not detected. Hex strings and regexes without a literal prefix are scanned over the full buffer. Reported match `length` values are never truncated.
+-   **Verification Scan Window**: 4096 bytes (`MAX_RE_SCAN_LIMIT`, mirroring libyara's `YR_RE_SCAN_LIMIT`). Bounds how far a literal-prefixed regex matcher searches when called with an explicit offset; a match extending past the window is not detected. Text strings are verified by a direct byte comparison and have no window. Hex strings and regexes without a literal prefix are scanned over the full buffer. Reported match `length` values are never truncated.
 -   **Max Matches Per String**: 100 (`MAX_MATCHES`), configurable via the scanner's `maxMatches` option/property. Enforced for hex strings and regexes without a literal prefix; literal text matches are uncapped.
 
 ### Common Structure
@@ -25,9 +38,12 @@ All matcher objects share this interface:
 {
   // The executable search function
   // @param data {Uint8Array} - The binary data to scan
-  // @param offset {number} - (Optional) If provided, verify match ONLY at this offset
+  // @param offset {number} - (Optional) Search start; a single run returns at most one match
   // @returns {Array} - List of match objects { offset, length, ... }
   matcher: function(data, offset),
+  // Exact-position check used for Aho-Corasick candidates. `hint` is the candidate, so text
+  // matchers can reuse the XOR key the automaton matched.
+  verifyAt: function(data, offset, hint),
 
   type: "text" | "hex" | "regex",
   private: boolean // If true, matches are not included in final output

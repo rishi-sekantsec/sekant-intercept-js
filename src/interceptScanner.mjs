@@ -136,6 +136,7 @@ export class InterceptScanner {
     this.filterDecisionCache = new Map();
     this.filterModuleCache = new Map();
     this.ac = null;
+    this.needsCandidateDedupe = false;
     this.autoParsePE = true; // Automatically parse PE files
     this.autoParseELF = true; // Automatically parse ELF files
     this.maxFileSize = 1024 * 1024; // 1MB default limit for filesize operator
@@ -177,6 +178,7 @@ export class InterceptScanner {
     this.rebuildFilterIndex();
 
     this.ac = null; // Reset AC automaton to force rebuild
+    this.needsCandidateDedupe = InterceptScanner.hasMultiPatternStrings(this.compiledRules);
 
     if (timingEnabled) {
       tracker.recordCompile(tracker.now() - start);
@@ -205,6 +207,7 @@ export class InterceptScanner {
     this.filterDecisionCache = new Map();
     this.filterModuleCache = new Map();
     this.ac = null;
+    this.needsCandidateDedupe = false;
   }
 
   /**
@@ -244,6 +247,17 @@ export class InterceptScanner {
   }
 
   /**
+   * Whether a string definition expands into several patterns (ascii + wide, base64 permutations).
+   * The Aho-Corasick engine already collapses repeated hits of one pattern, so only multi-pattern
+   * strings can report the same offset twice.
+   */
+  static hasMultiPatternStrings(rules) {
+    return rules.some((rule) =>
+      Object.values(rule.strings ?? {}).some((strDef) => (strDef.patterns?.length ?? 0) > 1)
+    );
+  }
+
+  /**
    * Verify candidates with full string matchers
    * @param {Array} candidates - Candidate matches
    * @param {Uint8Array} data - File data
@@ -252,20 +266,21 @@ export class InterceptScanner {
    */
   verifyCandidates(candidates, data, rules) {
     const verified = [];
+    const rulesById = new Map(rules.map((rule) => [rule.id, rule]));
 
     for (const candidate of candidates) {
-      const rule = rules.find((r) => r.id === candidate.id);
+      const rule = rulesById.get(candidate.id);
       if (!rule) continue;
 
       const strDef = rule.strings[candidate.varName];
       if (!strDef || !strDef.matcher) continue;
 
       // For text and regex with literal prefix, verify at the candidate offset. `verifyAt` demands
-      // a match starting exactly there; the plain window-scan form would also return a neighbouring
-      // occurrence, which duplicates that match and loses this candidate's own.
+      // a match starting exactly there; a forward scan would also return a neighbouring occurrence,
+      // which duplicates that match and loses this candidate's own.
       if (strDef.type === "text" || (strDef.type === "regex" && strDef.literalPrefix)) {
         const matches = typeof strDef.matcher.verifyAt === "function"
-          ? strDef.matcher.verifyAt(data, candidate.offset)
+          ? strDef.matcher.verifyAt(data, candidate.offset, candidate)
           : strDef.matcher(data, candidate.offset);
         if (matches && matches.length > 0) {
           verified.push({
@@ -293,6 +308,7 @@ export class InterceptScanner {
    */
   async buildStringMatches(verifiedCandidates, rules, data, metadata = {}) {
     const ruleMatches = {};
+    const rulesById = new Map(rules.map((rule) => [rule.id, rule]));
 
     // Initialize match structure for each rule
     for (const rule of rules) {
@@ -326,7 +342,7 @@ export class InterceptScanner {
        const lookupKey = ruleMatches[candidate.id][finalKey] ? finalKey : (finalKey.startsWith('$') ? finalKey : `\$${finalKey}`);
        
       const matchInfo = ruleMatches[candidate.id][lookupKey];
-      const ownerRule = rules.find((rule) => rule.id === candidate.id);
+      const ownerRule = rulesById.get(candidate.id);
       const strDef = ownerRule?.strings?.[candidate.varName];
 
       if (candidate.matches && candidate.matches.length > 0) {
@@ -1168,7 +1184,9 @@ export class InterceptScanner {
     }
 
     const dedupeStart = timingEnabled ? tracker.now() : 0;
-    const unique = this.deduplicateCandidates(candidates);
+    const unique = this.needsCandidateDedupe
+      ? this.deduplicateCandidates(candidates)
+      : candidates;
     if (timingEnabled && scanTiming) {
       tracker.accumulateStep(scanTiming.steps, "deduplicate", tracker.now() - dedupeStart);
     }

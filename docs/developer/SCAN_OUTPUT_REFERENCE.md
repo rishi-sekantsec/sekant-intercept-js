@@ -71,7 +71,7 @@ This section provides evidence for *why* the rule matched.
     -   Anonymous strings (`$ = "pattern"`) are internal and **removed** from this output.
 -   **Limits**:
     -   `count` and `matches` array are capped at the scanner's `maxMatches` (default: 100).
-    -   `length` is the full matched length and is never truncated; only the verifier's scan window is bounded (4096 bytes, `MAX_RE_SCAN_LIMIT`).
+    -   `length` is the full matched length and is never truncated; only the literal-prefixed regex verifier's scan window is bounded (4096 bytes, `MAX_RE_SCAN_LIMIT`).
 
 ### Capture Groups (Intercept extension)
 

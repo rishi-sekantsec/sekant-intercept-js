@@ -1358,6 +1358,55 @@ await test('20.6 Regex start/end anchors', () => {
 });
 
 // ═════════════════════════════════════════════════════════════════════════
+// SECTION 21: REGEX NOCASE MODIFIER
+// ═════════════════════════════════════════════════════════════════════════
+console.log('\n📋 Section 21: Regex Nocase Modifier\n');
+
+await test('21.1 Regex nocase modifier is case-insensitive', () => {
+  const matcher = getMatcher('/password/ nocase');
+  const data = encoder.encode('PASSWORD Password password');
+  const matches = matcher(data);
+  assertMatchCount(matches, 3, 'nocase modifier should match every case variant');
+});
+
+await test('21.2 Regex nocase modifier matches the i flag', () => {
+  const modifier = getMatcher('/password/ nocase');
+  const flag = getMatcher('/password/i');
+  const data = encoder.encode('PaSsWoRd');
+  assertEquals(modifier(data), flag(data), '`/foo/ nocase` should equal `/foo/i`');
+});
+
+await test('21.3 Regex nocase with literal prefix and quantifier', () => {
+  const matcher = getMatcher('/win(?:dows)?/ nocase');
+  const data = encoder.encode('WINDOWS and win32');
+  const matches = matcher(data);
+  assertMatchCount(matches, 2, 'Should match optional literal tail case-insensitively');
+});
+
+await test('21.4 Regex nocase stays case-sensitive without the modifier', () => {
+  const matcher = getMatcher('/password/');
+  const data = encoder.encode('PASSWORD Password password');
+  assertMatchCount(matcher(data), 1, 'Only the exact case should match');
+});
+
+await test('21.5 Regex nocase reports byte offsets', () => {
+  const matcher = getMatcher('/secret/ nocase');
+  const data = encoder.encode('xx SECRET');
+  const matches = matcher(data);
+  assertMatchCount(matches, 1, 'Should find the upper-case occurrence');
+  assertMatchAt(matches, 3, 'Match should start at byte offset 3');
+});
+
+await test('21.6 Regex exact verification stays byte-aligned on non-UTF-8 data', () => {
+  const matcher = getMatcher('/a.*b/');
+  // 0xE0 0x80 is a truncated UTF-8 sequence, so decoded text length != byte length
+  const data = new Uint8Array([0xE0, 0x80, 0x61, 0x62, 0xE0, 0x80]);
+  const matches = matcher.verifyAt(data, 2);
+  assertMatchCount(matches, 1, 'Candidate offset should verify against its own bytes');
+  assertMatchAt(matches, 2, 'Match should be reported at the candidate byte offset');
+});
+
+// ═════════════════════════════════════════════════════════════════════════
 // SUMMARY
 // ═════════════════════════════════════════════════════════════════════════
 console.log('\n═══════════════════════════════════════════════════════════════');
