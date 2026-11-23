@@ -95,4 +95,29 @@ try {
   console.error('✗ Test 4 failed:', error.message);
 }
 
+// Test 5: A regex ending in an escaped slash is not a comment
+const test5 = `
+rule Test5 {
+  strings:
+    $a = /a\\// // comment after the regex
+    $b = /x\\/y/ /* block comment */
+  condition:
+    any of them
+}
+`;
+
+try {
+  const parsed5 = parseYaraRule(test5);
+  if (parsed5.strings['$a'].definition !== '/a\\//') {
+    throw new Error(`Escaped trailing slash lost: ${JSON.stringify(parsed5.strings['$a'].definition)}`);
+  }
+  if (parsed5.strings['$b'].definition !== '/x\\/y/') {
+    throw new Error(`Regex with escaped slash lost: ${JSON.stringify(parsed5.strings['$b'].definition)}`);
+  }
+  console.log('\n✓ Test 5 passed: Regex ending in an escaped slash is preserved');
+} catch (error) {
+  console.error('✗ Test 5 failed:', error.message);
+  process.exitCode = 1;
+}
+
 console.log('\n✓ All tests passed!');

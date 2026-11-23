@@ -718,6 +718,164 @@ await test('Backdoor detection', async () => {
   });
 
   // ============================================================================
+  // Section 12: Literal candidates and regex modifiers
+  // ============================================================================
+
+  console.log('\n=== Section 12: Literal Candidates and Regex Modifiers ===\n');
+
+  await test('Regex nocase modifier matches through the automaton path', async () => {
+    const scanner = new InterceptScanner();
+    scanner.addRules(`
+      rule RegexNocase {
+        strings:
+          $a = /password[0-9]/ nocase
+        condition:
+          $a and #a == 3
+      }
+    `);
+
+    const data = new TextEncoder().encode('PASSWORD1 Password2 password3');
+    const results = await scanner.scan(data);
+
+    assertArrayLength(results, 1, 'All three case variants should be found');
+    const matched = results[0].strings.$a;
+    assertEquals(matched.count, 3);
+    assertEquals(matched.offsets, [0, 10, 20]);
+  });
+
+  await test('Regex nocase without the modifier stays case-sensitive', async () => {
+    const scanner = new InterceptScanner();
+    scanner.addRules(`
+      rule RegexCase {
+        strings:
+          $a = /password[0-9]/
+        condition:
+          $a
+      }
+    `);
+
+    const data = new TextEncoder().encode('PASSWORD1 Password2 password3');
+    const results = await scanner.scan(data);
+
+    assertArrayLength(results, 1);
+    assertEquals(results[0].strings.$a.count, 1);
+  });
+
+  await test('Overlapping literal occurrences are each verified once', async () => {
+    const scanner = new InterceptScanner();
+    scanner.addRules(`
+      rule Overlap {
+        strings:
+          $a = "aa" nocase
+        condition:
+          #a == 3
+      }
+    `);
+
+    const data = new TextEncoder().encode('AAAA');
+    const results = await scanner.scan(data);
+
+    assertArrayLength(results, 1, 'Three overlapping occurrences should match');
+    assertEquals(results[0].strings.$a.offsets, [0, 1, 2]);
+  });
+
+  await test('XOR literal candidates carry the key that matched', async () => {
+    const scanner = new InterceptScanner();
+    scanner.addRules(`
+      rule XorRule {
+        strings:
+          $a = "secret" xor(0x01-0xff)
+        condition:
+          $a and @a == 2
+      }
+    `);
+
+    const payload = new TextEncoder().encode('xxsecretxx');
+    const data = new Uint8Array(payload.length);
+    for (let i = 0; i < payload.length; i++) data[i] = payload[i] ^ 0x20;
+
+    const results = await scanner.scan(data);
+
+    assertArrayLength(results, 1, 'XOR encoded literal should match');
+    assertEquals(results[0].strings.$a.offsets, [2]);
+  });
+
+  await test('Non-ASCII literal is found in raw bytes', async () => {
+    const scanner = new InterceptScanner();
+    scanner.addRules(`
+      rule UnicodeLiteral {
+        strings:
+          $a = "测试数据" ascii
+        condition:
+          $a
+      }
+    `);
+
+    const data = new TextEncoder().encode('这是测试数据的例子');
+    const results = await scanner.scan(data);
+
+    assertArrayLength(results, 1, 'UTF-8 literal should match raw data');
+    assertEquals(results[0].strings.$a.offsets, [new TextEncoder().encode('这是').length]);
+  });
+
+  await test('Anchored regex only matches at the buffer bounds', async () => {
+    const scanner = new InterceptScanner();
+    scanner.addRules(`
+      rule Anchors {
+        strings:
+          $start = /^begin/
+          $end = /finish$/
+        condition:
+          any of them
+      }
+    `);
+
+    const leading = await scanner.scan(new TextEncoder().encode('begin here, begin again'));
+    assertEquals(leading[0].strings.$start.offsets, [0], '^ should only match at offset 0');
+
+    const trailing = await scanner.scan(new TextEncoder().encode('finish then finish'));
+    assertEquals(trailing[0].strings.$end.offsets, [12], '$ should only match at the buffer end');
+  });
+
+  await test('Regex with an escaped trailing slash is parsed and matched', async () => {
+    const scanner = new InterceptScanner();
+    scanner.addRules(`
+      rule EscapedSlash {
+        strings:
+          $a = /http:\\/\\// // scheme, escaped slashes at the end
+          $b = /x\\/y/ /* inline block comment */
+        condition:
+          any of them
+      }
+    `);
+
+    const results = await scanner.scan(new TextEncoder().encode('go http://x/y now'));
+
+    assertArrayLength(results, 1, 'Both regexes should be compiled and matched');
+    assertEquals(results[0].strings.$a.offsets, [3]);
+    assertEquals(results[0].strings.$b.offsets, [11]);
+  });
+
+  await test('Uncompilable string does not fail the scan', async () => {
+    const scanner = new InterceptScanner();
+    scanner.addRules(`
+      rule Broken {
+        strings:
+          $bad = /[/ 
+          $good = "malware"
+        condition:
+          $good
+      }
+    `);
+
+    const results = await scanner.scan(new TextEncoder().encode('malware'));
+
+    assertArrayLength(results, 1, 'The valid string should still match');
+    assertEquals(results[0].strings.$good.offsets, [0]);
+    assertTrue(!results[0].strings.$bad, 'The broken string should report no matches');
+  });
+
+  // ============================================================================
   // Summary
   // ============================================================================
 

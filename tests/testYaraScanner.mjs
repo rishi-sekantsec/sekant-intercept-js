@@ -837,6 +837,44 @@ await test('Backdoor detection', async () => {
     assertEquals(trailing[0].strings.$end.offsets, [12], '$ should only match at the buffer end');
   });
 
+  await test('Regex with an escaped trailing slash is parsed and matched', async () => {
+    const scanner = new InterceptScanner();
+    scanner.addRules(`
+      rule EscapedSlash {
+        strings:
+          $a = /http:\\/\\// // scheme, escaped slashes at the end
+          $b = /x\\/y/ /* inline block comment */
+        condition:
+          any of them
+      }
+    `);
+
+    const results = await scanner.scan(new TextEncoder().encode('go http://x/y now'));
+
+    assertArrayLength(results, 1, 'Both regexes should be compiled and matched');
+    assertEquals(results[0].strings.$a.offsets, [3]);
+    assertEquals(results[0].strings.$b.offsets, [11]);
+  });
+
+  await test('Uncompilable string does not fail the scan', async () => {
+    const scanner = new InterceptScanner();
+    scanner.addRules(`
+      rule Broken {
+        strings:
+          $bad = /[/ 
+          $good = "malware"
+        condition:
+          $good
+      }
+    `);
+
+    const results = await scanner.scan(new TextEncoder().encode('malware'));
+
+    assertArrayLength(results, 1, 'The valid string should still match');
+    assertEquals(results[0].strings.$good.offsets, [0]);
+    assertTrue(!results[0].strings.$bad, 'The broken string should report no matches');
+  });
+
   // ============================================================================
   // Summary
   // ============================================================================

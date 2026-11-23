@@ -1406,6 +1406,27 @@ await test('21.6 Regex exact verification stays byte-aligned on non-UTF-8 data',
   assertMatchAt(matches, 2, 'Match should be reported at the candidate byte offset');
 });
 
+await test('21.7 Regex ending in an escaped slash survives rule parsing', () => {
+  // `\/` right before the closing delimiter used to read as a `//` comment
+  const rule = `
+    rule EscapedSlash {
+      strings:
+        $a = /http:\\/\\//
+        $b = /tail\\/$/
+      condition:
+        $a or $b
+    }
+  `;
+  const compiled = compileYaraRule(rule);
+
+  const urls = compiled.match(encoder.encode('see http://example.com now'));
+  assertMatchCount(urls.stringMatches.$a, 1, 'Escaped trailing slash in a regex should be preserved');
+  assertMatchAt(urls.stringMatches.$a, 4, 'Match should start at the scheme');
+
+  const trailing = compiled.match(encoder.encode('dir/tail/'));
+  assertMatchCount(trailing.stringMatches.$b, 1, 'Escaped slash before the end anchor should be preserved');
+});
+
 // ═════════════════════════════════════════════════════════════════════════
 // SUMMARY
 // ═════════════════════════════════════════════════════════════════════════

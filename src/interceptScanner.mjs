@@ -383,6 +383,9 @@ export class InterceptScanner {
     for (const rule of rules) {
       for (const [varName, strDef] of Object.entries(rule.strings)) {
         if (strDef.type === "text" || (strDef.type === "regex" && strDef.literalPrefix?.length > 0)) continue; // Should be part of AC verified candidates
+        // String definitions that failed to compile carry no matcher; their warning was emitted at
+        // compile time, and the string simply never matches.
+        if (!strDef.matcher) continue;
 
         // Handle key lookup (handle $.anon for anonymous)
         const finalKey = varName.startsWith('.') ? `\$${varName}` : varName;

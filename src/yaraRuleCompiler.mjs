@@ -66,9 +66,38 @@ function parseImports(text) {
 }
 
 /**
+ * A regex literal only starts where YARA allows one: after the `=` of a string definition, or
+ * after the `matches` operator. Everywhere else `/` is just a character.
+ */
+function isRegexStart(text, index) {
+  let p = index - 1;
+  while (p >= 0 && (text[p] === ' ' || text[p] === '\t')) p--;
+  if (p < 0) return false;
+  if (text[p] === '=') return true;
+
+  let wordStart = p;
+  while (wordStart >= 0 && /[A-Za-z_]/.test(text[wordStart])) wordStart--;
+  return text.slice(wordStart + 1, p + 1) === 'matches';
+}
+
+/** Index of the closing slash of the regex literal starting at `start`, or -1 if it never closes. */
+function findRegexEnd(text, start) {
+  for (let i = start + 1; i < text.length; i++) {
+    if (text[i] === '\\') {
+      i += 1; // escaped character, including \/
+    } else if (text[i] === '/') {
+      return i;
+    } else if (text[i] === '\n') {
+      return -1; // regex literals cannot span lines
+    }
+  }
+  return -1;
+}
+
+/**
  * Remove comments from YARA rule text
  * Handles both single-line (//) and multi-line C-style comments
- * Preserves strings to avoid removing comment-like patterns inside them
+ * Preserves string and regex literals to avoid removing comment-like patterns inside them
  * @param {string} text - The text to strip comments from
  * @returns {string} Text with comments removed
  */
@@ -94,6 +123,19 @@ function stripComments(text) {
         } else {
           result += text[i++];
         }
+      }
+    }
+    // Check for a regex literal (preserve it as-is). Without this, an escaped `\/` right before
+    // the closing `/` reads as the start of a `//` comment and truncates the definition. `//` and
+    // `/*` are always comments, never empty regexes.
+    else if (text[i] === '/' && text[i + 1] !== '/' && text[i + 1] !== '*' && isRegexStart(text, i)) {
+      const end = findRegexEnd(text, i);
+      if (end < 0) {
+        // Unterminated: leave the slash as ordinary text so the rest is still comment-stripped.
+        result += text[i++];
+      } else {
+        result += text.slice(i, end + 1);
+        i = end + 1;
       }
     }
     // Check for single-line comment
